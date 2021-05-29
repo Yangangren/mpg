@@ -69,9 +69,9 @@ def built_AMPC_parser():
     parser.add_argument('--off_policy', type=str, default=True)
 
     # env
-    parser.add_argument('--env_id', default='CrossroadEnd2endPI-v1')
+    parser.add_argument('--env_id', default='CrossroadEnd2endPiIntegrate-v0')
     parser.add_argument('--env_kwargs_num_future_data', type=int, default=0)
-    parser.add_argument('--env_kwargs_training_task', type=str, default='left')
+    parser.add_argument('--env_kwargs_training_task', type=str, default='left')  # todo
     parser.add_argument('--obs_dim', default=None)
     parser.add_argument('--act_dim', default=None)
 

@@ -84,7 +84,7 @@ class OffPolicyWorker(object):
         self.preprocessor.load_params(load_dir)
 
     def sample(self):
-        batch_data = []
+        batch_data = {'left': [], 'straight': [], 'right': []}
         for _ in range(self.batch_size):
             obs_ego = self.obs[: self.args.state_ego_dim + self.args.state_track_dim]
             obs_other = np.reshape(self.obs[self.args.state_ego_dim + self.args.state_track_dim:],
@@ -111,17 +111,18 @@ class OffPolicyWorker(object):
             obs_other_next = np.reshape(obs_tp1[self.args.state_ego_dim + self.args.state_track_dim:],
                                         (-1, self.args.state_other_dim))
             veh_num_next = info['veh_num']
-            batch_data.append((obs_ego_next, obs_other_next, veh_num_next, self.done, info['ref_index']))
+            batch_data[info['task']].append((obs_ego_next, obs_other_next, veh_num_next, self.done, info['ref_index']))
             self.obs = self.env.reset() if self.done else obs_tp1.copy()
             # self.env.render()
 
         if self.worker_id == 1 and self.sample_times % self.args.worker_log_interval == 0:
             logger.info('Worker_info: {}'.format(self.get_stats()))
 
-        self.num_sample += len(batch_data)
+        batch_len = sum([len(item) for item in batch_data.values()])
+        self.num_sample += batch_len
         self.sample_times += 1
-        return batch_data
+        return batch_data, batch_len
 
     def sample_with_count(self):
-        batch_data = self.sample()
-        return batch_data, len(batch_data)
+        batch_data, batch_len = self.sample()
+        return batch_data, batch_len

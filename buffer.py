@@ -30,7 +30,8 @@ class ReplayBuffer(object):
         """
         self.args = args
         self.buffer_id = buffer_id
-        self._storage = []
+        self._storage = {'left': [], 'straight': [], 'right': []}
+        self._storage_idx = {'left': 0, 'straight': 0, 'right': 0}
         self._maxsize = self.args.max_buffer_size
         self._next_idx = 0
         self.replay_starts = self.args.replay_starts
@@ -40,24 +41,28 @@ class ReplayBuffer(object):
         logger.info('Buffer initialized')
 
     def get_stats(self):
-        self.stats.update(dict(storage=len(self._storage)))
+        self.stats.update(dict(storage=self.__len__()))
         return self.stats
 
     def __len__(self):
-        return len(self._storage)
+        return sum([len(item) for item in self._storage.values()])
 
-    def add(self, obs_ego_next, obs_others_next, veh_num_next, done, ref_index, weight):
+    def add(self, obs_ego_next, obs_others_next, veh_num_next, done, ref_index, task, weight):
         data = (obs_ego_next, obs_others_next, veh_num_next, done, ref_index)
-        if self._next_idx >= len(self._storage):
-            self._storage.append(data)
+        if self._next_idx >= self.__len__():
+            self._storage[task].append(data)
         else:
-            self._storage[self._next_idx] = data
+            self._storage[task][self._storage_idx[task]] = data
         self._next_idx = (self._next_idx + 1) % self._maxsize
+        if self._next_idx == 0:
+            self._storage_idx = {'left': 0, 'straight': 0, 'right': 0}
+        else:
+            self._storage_idx[task] = (self._storage_idx[task] + 1) % self._maxsize
 
-    def _encode_sample(self, idxes):
+    def _encode_sample(self, idxes, task):
         obses_ego_next, obses_other_next, vehs_num_next, dones, ref_indexs = [], [], [], [], []
         for i in idxes:
-            data = self._storage[i]
+            data = self._storage[task][i]
             obs_ego_next, obs_other_next, veh_num_next, done, ref_index = data
             obses_ego_next.append(np.array(obs_ego_next, copy=False))
             obses_other_next.append(np.array(obs_other_next, copy=False))
@@ -71,21 +76,23 @@ class ReplayBuffer(object):
                np.array(dones), np.array(ref_indexs)
 
     def sample_idxes(self, batch_size):
-        return np.array([random.randint(0, len(self._storage) - 1) for _ in range(batch_size)], dtype=np.int32)
+        task = random.choice(['left', 'straight', 'right'])
+        return np.array([random.randint(0, len(self._storage[task]) - 1) for _ in range(batch_size)], dtype=np.int32), task
 
-    def sample_with_idxes(self, idxes):
-        return list(self._encode_sample(idxes)) + [idxes,]
+    def sample_with_idxes(self, idxes, task):
+        return list(self._encode_sample(idxes, task)) + [task] + [idxes,]
 
     def sample(self, batch_size):
-        idxes = self.sample_idxes(batch_size)
-        return self.sample_with_idxes(idxes)
+        idxes, task = self.sample_idxes(batch_size)
+        return self.sample_with_idxes(idxes, task)
 
     def add_batch(self, batch):
-        for trans in batch:
-            self.add(*trans, 0)
+        for task, values in batch.items():
+            for trans in values:
+                self.add(*trans, task, 0)
 
     def replay(self):
-        if len(self._storage) < self.replay_starts:
+        if self.__len__() < self.replay_starts:
             return None
         if self.buffer_id == 1 and self.replay_times % self.args.buffer_log_interval == 0:
             logger.info('Buffer info: {}'.format(self.get_stats()))
