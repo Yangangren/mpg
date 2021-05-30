@@ -86,8 +86,8 @@ class OffPolicyWorker(object):
     def sample(self):
         batch_data = {'left': [], 'straight': [], 'right': []}
         for _ in range(self.batch_size):
-            obs_ego = self.obs[: self.args.state_ego_dim + self.args.state_track_dim]
-            obs_other = np.reshape(self.obs[self.args.state_ego_dim + self.args.state_track_dim:],
+            obs_ego = self.obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim]
+            obs_other = np.reshape(self.obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim:],
                                   (-1, self.args.state_other_dim))
             processed_obs_ego, processed_obs_other = self.preprocessor.process_obs_PI(obs_ego, obs_other)
             PI_obs_other = tf.reduce_sum(self.policy_with_value.compute_PI(processed_obs_other), axis=0)
@@ -107,8 +107,8 @@ class OffPolicyWorker(object):
                 raise ValueError
             obs_tp1, reward, self.done, info = self.env.step(action.numpy()[0])
             processed_rew = self.preprocessor.process_rew(reward, self.done)
-            obs_ego_next = obs_tp1[: self.args.state_ego_dim + self.args.state_track_dim]
-            obs_other_next = np.reshape(obs_tp1[self.args.state_ego_dim + self.args.state_track_dim:],
+            obs_ego_next = obs_tp1[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim]
+            obs_other_next = np.reshape(obs_tp1[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim:],
                                         (-1, self.args.state_other_dim))
             veh_num_next = info['veh_num']
             batch_data[info['task']].append((obs_ego_next, obs_other_next, veh_num_next, self.done, info['ref_index']))

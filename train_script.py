@@ -80,6 +80,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_veh_num', type=int, default=8)
     parser.add_argument('--state_ego_dim', type=int, default=None)
     parser.add_argument('--state_track_dim', type=int, default=None)
+    parser.add_argument('--state_task_dim', type=int, default=None)
     parser.add_argument('--state_other_dim', type=int, default=None)
 
     # learner
@@ -171,9 +172,10 @@ def built_parser(alg_name):
         obs_space, act_space = env.observation_space, env.action_space
         args.state_ego_dim, args.state_track_dim, args.state_other_dim = env.ego_info_dim, env.per_tracking_info_dim, \
                                                                          env.per_veh_info_dim
+        args.state_task_dim = env.path_point_num * env.per_task_info_dim
         args.PI_in_dim = env.per_veh_info_dim
         args.PI_out_dim = args.max_veh_num * env.per_veh_info_dim + 1
-        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_ego_dim + args.state_track_dim, act_space.shape[0]
+        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_ego_dim + args.state_track_dim + args.state_task_dim, act_space.shape[0]
         return args
 
 def main(alg_name):
