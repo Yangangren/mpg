@@ -152,8 +152,9 @@ def built_AMPC_parser():
     parser.add_argument('--log_interval', type=int, default=100)
 
     # IO
+    args = parser.parse_args()
     time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    results_dir = './results/integrate_3lane/experiment-{time}'.format(time=time_now)
+    results_dir = './results/{env}/experiment-{time}'.format(env=args.env_id, time=time_now)
     parser.add_argument('--result_dir', type=str, default=results_dir)
     parser.add_argument('--log_dir', type=str, default=results_dir + '/logs')
     parser.add_argument('--model_dir', type=str, default=results_dir + '/models')
