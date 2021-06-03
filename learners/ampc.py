@@ -68,7 +68,6 @@ class AMPCLearner(object):
                            'batch_dones': batch_data[3].astype(np.float32),
                            'batch_ref_index': batch_data[4].astype(np.int32)
                            }
-        self.task = batch_data[5]
 
     def get_weights(self):
         return self.policy_with_value.get_weights()
@@ -90,7 +89,7 @@ class AMPCLearner(object):
         start_obses_ego = self.tf.tile(start_obses_ego, [self.M, 1])
         start_obses_other = self.tf.tile(start_obses_other, [self.M, 1])
 
-        self.model.reset(start_obses_ego, start_obses_other, start_veh_num, self.task, mb_ref_index)
+        self.model.reset(start_obses_ego, start_obses_other, start_veh_num, task='unify', ref_indexes=mb_ref_index)
 
         rewards_sum = self.tf.zeros((start_obses_ego.shape[0],))
         punish_terms_for_training_sum = self.tf.zeros((start_obses_ego.shape[0],))

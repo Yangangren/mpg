@@ -60,16 +60,17 @@ class ReplayBuffer(object):
         #     print(self._storage_idx.values())
         #     # print(self.__len__())
 
-    def _encode_sample(self, idxes, task):
+    def _encode_sample(self, idxes_dict):
         obses_ego_next, obses_other_next, vehs_num_next, dones, ref_indexs = [], [], [], [], []
-        for i in idxes:
-            data = self._storage[task][i]
-            obs_ego_next, obs_other_next, veh_num_next, done, ref_index = data
-            obses_ego_next.append(np.array(obs_ego_next, copy=False))
-            obses_other_next.append(np.array(obs_other_next, copy=False))
-            vehs_num_next.append(veh_num_next)
-            dones.append(done)
-            ref_indexs.append(ref_index)
+        for task, value in idxes_dict.items():
+            for i in value:
+                data = self._storage[task][i]
+                obs_ego_next, obs_other_next, veh_num_next, done, ref_index = data
+                obses_ego_next.append(np.array(obs_ego_next, copy=False))
+                obses_other_next.append(np.array(obs_other_next, copy=False))
+                vehs_num_next.append(veh_num_next)
+                dones.append(done)
+                ref_indexs.append(ref_index)
         obses_others_next = np.concatenate(([obses_other_next[i] for i in range(len(obses_other_next))]), axis=0)
         # print(vehs_mode_next.shape, obses_others_next.shape, np.sum(np.array(vehs_num_next)))
 
@@ -77,17 +78,17 @@ class ReplayBuffer(object):
                np.array(dones), np.array(ref_indexs)
 
     def sample_idxes(self, batch_size):
-        task = random.choice(['left', 'straight', 'right'])
-        while len(self._storage[task]) < 2:
-            task = random.choice(['left', 'straight', 'right'])
-        return np.array([random.randint(0, len(self._storage[task]) - 1) for _ in range(batch_size)], dtype=np.int32), task
+        idx_dict = {'left': [], 'straight': [], 'right': []}
+        for task in idx_dict.keys():
+            idx_dict[task].extend([random.randint(0, len(self._storage[task]) - 1) for _ in range(batch_size // 3)])
+        return idx_dict
 
-    def sample_with_idxes(self, idxes, task):
-        return list(self._encode_sample(idxes, task)) + [task] + [idxes,]
+    def sample_with_idxes(self, idxes):
+        return list(self._encode_sample(idxes)) + [idxes,]
 
     def sample(self, batch_size):
-        idxes, task = self.sample_idxes(batch_size)
-        return self.sample_with_idxes(idxes, task)
+        idxes = self.sample_idxes(batch_size)
+        return self.sample_with_idxes(idxes)
 
     def add_batch(self, batch):
         for task, values in batch.items():
