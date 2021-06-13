@@ -70,7 +70,7 @@ def built_AMPC_parser():
 
     # env
     parser.add_argument('--env_id', default='CrossroadEnd2end-v2')
-    parser.add_argument('--env_kwargs_num_future_data', type=int, default=0)
+    parser.add_argument('--env_kwargs_num_future_data', type=int, default=5)
     parser.add_argument('--env_kwargs_training_task', type=str, default='left')
     parser.add_argument('--obs_dim', default=None)
     parser.add_argument('--act_dim', default=None)
@@ -93,7 +93,7 @@ def built_AMPC_parser():
     # buffer
     parser.add_argument('--max_buffer_size', type=int, default=50000)
     parser.add_argument('--replay_starts', type=int, default=3000)
-    parser.add_argument('--replay_batch_size', type=int, default=1024)
+    parser.add_argument('--replay_batch_size', type=int, default=512)
     parser.add_argument('--replay_alpha', type=float, default=0.6)
     parser.add_argument('--replay_beta', type=float, default=0.4)
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
@@ -111,7 +111,7 @@ def built_AMPC_parser():
     parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
-    parser.add_argument('--hidden_activation', type=str, default='elu')
+    parser.add_argument('--hidden_activation', type=str, default='gelu')
     parser.add_argument('--deterministic_policy', default=True, action='store_true')
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
     parser.add_argument('--action_range', type=float, default=None)
@@ -127,7 +127,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=35)
+    parser.add_argument('--num_learners', type=int, default=15)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
@@ -156,8 +156,8 @@ def built_parser(alg_name):
         args.obs_dim, args.act_dim = obs_space.shape[0], act_space.shape[0]
         args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
                          [1., 1 / 15., 0.2] + \
-                         [1., 1., 1 / 15.] * args.env_kwargs_num_future_data + \
-                         [1 / 30., 1 / 30., 0.2, 1 / 180.] * env.veh_num
+                         [1., 1., 1 / 15., 0.2] * args.env_kwargs_num_future_data + \
+                         [1.] + [1 / 30., 1 / 30., 0.2, 1 / 180.] * env.veh_num
         return args
 
 def main(alg_name):
