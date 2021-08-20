@@ -70,7 +70,7 @@ def built_AMPC_parser():
 
     # env
     parser.add_argument('--env_id', default='CrossroadEnd2endPiIntegrate-v0')
-    parser.add_argument('--env_kwargs_num_future_data', type=int, default=10)
+    parser.add_argument('--env_kwargs_num_future_data', type=int, default=3)
     parser.add_argument('--env_kwargs_training_task', type=str, default='left')  # todo
     parser.add_argument('--obs_dim', default=None)
     parser.add_argument('--act_dim', default=None)
@@ -80,6 +80,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_veh_num', type=int, default=8)
     parser.add_argument('--state_ego_dim', type=int, default=None)
     parser.add_argument('--state_track_dim', type=int, default=None)
+    parser.add_argument('--state_light_dim', type=int, default=None)
     parser.add_argument('--state_task_dim', type=int, default=None)
     parser.add_argument('--state_other_dim', type=int, default=None)
 
@@ -101,7 +102,7 @@ def built_AMPC_parser():
     # buffer
     parser.add_argument('--max_buffer_size', type=int, default=50000)
     parser.add_argument('--replay_starts', type=int, default=3000)
-    parser.add_argument('--replay_batch_size', type=int, default=270)
+    parser.add_argument('--replay_batch_size', type=int, default=256)
     parser.add_argument('--replay_alpha', type=float, default=0.6)
     parser.add_argument('--replay_beta', type=float, default=0.4)
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
@@ -134,7 +135,8 @@ def built_AMPC_parser():
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
-    parser.add_argument('--obs_scale', type=list, default=None)
+    parser.add_argument('--obs_ego_scale', type=list, default=None)
+    parser.add_argument('--obs_other_scale', type=list, default=None)
     parser.add_argument('--reward_preprocess_type', type=str, default='scale')
     parser.add_argument('--reward_scale', type=float, default=0.1)
     parser.add_argument('--reward_shift', type=float, default=0.)
@@ -143,7 +145,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=600000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=11)
+    parser.add_argument('--num_learners', type=int, default=4)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
@@ -171,12 +173,18 @@ def built_parser(alg_name):
         env = gym.make(args.env_id, **args2envkwargs(args))
         obs_space, act_space = env.observation_space, env.action_space
         args.state_ego_dim, args.state_track_dim, args.state_other_dim = env.ego_info_dim, \
-                                                                         env.per_tracking_info_dim * (env.num_future_data + 1), \
+                                                                         env.track_info_dim + env.per_path_info_dim * env.num_future_data, \
                                                                          env.per_veh_info_dim
         args.state_task_dim = env.task_info_dim
+        args.state_light_dim = env.light_dim
         args.PI_in_dim = env.per_veh_info_dim
         args.PI_out_dim = args.max_veh_num * env.per_veh_info_dim + 1
-        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_ego_dim + args.state_track_dim + args.state_task_dim, act_space.shape[0]
+        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_ego_dim + args.state_track_dim + args.state_task_dim + args.state_light_dim,\
+                                     act_space.shape[0]
+        args.obs_ego_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
+                             [1., 1 / 15., 0.2] + [1., 1., 1 / 15., 1.] * args.env_kwargs_num_future_data + \
+                             [1.] + [1.]
+        args.obs_other_scale = [1 / 30., 1 / 30., 0.2, 1 / 180.]
         return args
 
 def main(alg_name):

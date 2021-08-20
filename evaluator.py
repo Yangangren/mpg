@@ -70,8 +70,8 @@ class Evaluator(object):
         if render: self.env.render()
         if steps is not None:
             for _ in range(steps):
-                obs_ego = obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim]
-                obs_other = np.reshape(obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim:],
+                obs_ego = obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim]
+                obs_other = np.reshape(obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim:],
                                        (-1, self.args.state_other_dim))
                 processed_obs_ego, processed_obs_other = self.preprocessor.tf_process_obses_PI(obs_ego, obs_other)
                 PI_obs_other = tf.reduce_sum(self.policy_with_value.compute_PI(processed_obs_other), axis=0)
@@ -84,8 +84,8 @@ class Evaluator(object):
                 reward_list.append(reward)
         else:
             while not done:
-                obs_ego = obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim]
-                obs_other = np.reshape(obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_task_dim:],
+                obs_ego = obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim]
+                obs_other = np.reshape(obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim:],
                                        (-1, self.args.state_other_dim))
                 processed_obs_ego, processed_obs_other = self.preprocessor.tf_process_obses_PI(obs_ego, obs_other)
                 PI_obs_other = tf.reduce_sum(self.policy_with_value.compute_PI(processed_obs_other), axis=0)
