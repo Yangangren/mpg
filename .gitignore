@@ -205,3 +205,9 @@ dmypy.json
 .idea/
 results/
 test_for_debug.py
+/LasVSim/
+/sumo_files/
+/dynamics_and_models.py
+/endtoend.py
+/endtoend_env_utils.py
+/traffic.py
