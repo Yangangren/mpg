@@ -46,8 +46,8 @@ class ReplayBuffer(object):
     def __len__(self):
         return len(self._storage)
 
-    def add(self, obs_ego_next, obs_others_next, veh_num_next, done, ref_index, weight):
-        data = (obs_ego_next, obs_others_next, veh_num_next, done, ref_index)
+    def add(self, obs, done, future_point, mask, weight):
+        data = (obs, done, future_point, mask)
         if self._next_idx >= len(self._storage):
             self._storage.append(data)
         else:
@@ -55,20 +55,16 @@ class ReplayBuffer(object):
         self._next_idx = (self._next_idx + 1) % self._maxsize
 
     def _encode_sample(self, idxes):
-        obses_ego_next, obses_other_next, vehs_num_next, dones, ref_indexs = [], [], [], [], []
+        obses, dones, future_points, masks = [], [], [], []
         for i in idxes:
             data = self._storage[i]
-            obs_ego_next, obs_other_next, veh_num_next, done, ref_index = data
-            obses_ego_next.append(np.array(obs_ego_next, copy=False))
-            obses_other_next.append(np.array(obs_other_next, copy=False))
-            vehs_num_next.append(veh_num_next)
+            obs, done, future_point, mask = data
+            obses.append(np.array(obs, copy=False))
             dones.append(done)
-            ref_indexs.append(ref_index)
-        obses_others_next = np.concatenate(([obses_other_next[i] for i in range(len(obses_other_next))]), axis=0)
+            future_points.append(np.array(future_point, copy=False))
+            masks.append(np.array(mask, copy=False))
         # print(vehs_mode_next.shape, obses_others_next.shape, np.sum(np.array(vehs_num_next)))
-
-        return np.array(obses_ego_next), np.array(obses_others_next), np.array(vehs_num_next), \
-               np.array(dones), np.array(ref_indexs)
+        return np.array(obses), np.array(dones),  np.array(future_points), np.array(masks)
 
     def sample_idxes(self, batch_size):
         return np.array([random.randint(0, len(self._storage) - 1) for _ in range(batch_size)], dtype=np.int32)

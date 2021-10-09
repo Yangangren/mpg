@@ -43,6 +43,35 @@ class MLPNet(Model):
         x = self.outputs(x)
         return x
 
+
+class PINet(Model):
+    def __init__(self, item_num, per_item_dim, num_hidden_layers, num_hidden_units, hidden_activation, output_dim, **kwargs):
+        super(PINet, self).__init__(name=kwargs['name'])
+        self.first_ = Dense(num_hidden_units,
+                            activation=hidden_activation,
+                            kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
+                            dtype=tf.float32)
+        self.hidden = Sequential([Dense(num_hidden_units,
+                                        activation=hidden_activation,
+                                        kernel_initializer=tf.keras.initializers.Orthogonal(np.sqrt(2.)),
+                                        dtype=tf.float32) for _ in range(num_hidden_layers-1)])
+        output_activation = kwargs['output_activation'] if kwargs.get('output_activation') else 'linear'
+        self.outputs = Dense(output_dim,
+                             activation=output_activation,
+                             kernel_initializer=tf.keras.initializers.Orthogonal(1.),
+                             bias_initializer=tf.keras.initializers.Constant(0.),
+                             dtype=tf.float32)
+        self.build(input_shape=(None, item_num, per_item_dim,))   # todo
+
+    def call(self, x, **kwargs):
+        x = self.first_(x)
+        x = self.hidden(x)
+        x = self.outputs(x)
+        return x
+
+
+
+
 def test_attrib():
     a = Variable(0, name='d')
 
@@ -62,12 +91,6 @@ def test_attrib():
     # print(p.get_weights())
     # print(p.trainable_weights)
 
-
-def test_clone():
-    p = MLPNet(2, 2, 128, 1, name='ttt')
-    print(p._is_graph_network)
-    s = tf.keras.models.clone_model(p)
-    print(s)
 
 def test_out():
     import numpy as np
@@ -91,6 +114,14 @@ def test_memory2():
     time.sleep(10000)
 
 
+def test_encoding_net():
+    p = PINet(2, 3, 2, 128, hidden_activation='gelu', output_dim=57, name='PI-encoding')
+    data = [[[1., 2., 3.], [4., 5., 6.]], [[7., 8., 9.], [10., 11., 12.]]]
+    data = tf.convert_to_tensor(data, dtype=tf.float32)
+    results = p(data)
+    print(results)
+    results = tf.reduce_sum()
 
 if __name__ == '__main__':
+    test_encoding_net()
     test_memory2()

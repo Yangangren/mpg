@@ -63,7 +63,6 @@ class Preprocessor(object):
         self.ob_rms = RunningMeanStd(shape=ob_shape) if self.obs_ptype == 'normalize' else None
         self.rew_ptype = rew_ptype
         self.ret_rms = RunningMeanStd(shape=()) if self.rew_ptype == 'normalize' else None
-        self.obs_scale = None
         self.rew_scale = rew_scale if self.rew_ptype == 'scale' else None
         self.rew_shift = rew_shift if self.rew_ptype == 'scale' else None
 
@@ -74,8 +73,7 @@ class Preprocessor(object):
         self.epsilon = epsilon
         self.num_agent = None
         self.args = args
-        self.obs_ego_scale = self.args.obs_ego_scale
-        self.obs_other_scale = self.args.obs_other_scale
+        self.obs_scale = self.args.obs_scale
         if 'num_agent' in kwargs.keys():
             self.ret = np.zeros(kwargs['num_agent'])
             self.num_agent = kwargs['num_agent']
@@ -116,22 +114,22 @@ class Preprocessor(object):
         else:
             return obs
 
-    def process_obs_PI(self, obs_ego, obs_other):
-        if self.obs_ptype == 'scale':
-            processed_obs_ego = obs_ego * self.obs_ego_scale
-            processed_obs_other = obs_other * self.obs_other_scale
-            return processed_obs_ego, processed_obs_other
-
-    def tf_process_obses_PI(self, obses_ego, obses_other):
-        with tf.name_scope('obs_process') as scope:
-            if self.obs_ptype == 'scale':
-                processed_obses_ego = obses_ego * tf.convert_to_tensor(self.obs_ego_scale, dtype=tf.float32)
-                processed_obses_other = obses_other * tf.convert_to_tensor(self.obs_other_scale, dtype=tf.float32)
-                return processed_obses_ego, processed_obses_other
-            else:
-                print('no scale')
-                return tf.convert_to_tensor(obses_ego, dtype=tf.float32), \
-                       tf.convert_to_tensor(obses_other, dtype=tf.float32)
+    # def process_obs_PI(self, obs_ego, obs_other):
+    #     if self.obs_ptype == 'scale':
+    #         processed_obs_ego = obs_ego * self.obs_ego_scale
+    #         processed_obs_other = obs_other * self.obs_other_scale
+    #         return processed_obs_ego, processed_obs_other
+    #
+    # def tf_process_obses_PI(self, obses_ego, obses_other):
+    #     with tf.name_scope('obs_process') as scope:
+    #         if self.obs_ptype == 'scale':
+    #             processed_obses_ego = obses_ego * tf.convert_to_tensor(self.obs_ego_scale, dtype=tf.float32)
+    #             processed_obses_other = obses_other * tf.convert_to_tensor(self.obs_other_scale, dtype=tf.float32)
+    #             return processed_obses_ego, processed_obses_other
+    #         else:
+    #             print('no scale')
+    #             return tf.convert_to_tensor(obses_ego, dtype=tf.float32), \
+    #                    tf.convert_to_tensor(obses_other, dtype=tf.float32)
 
     def np_process_obses(self, obses):
         if self.obs_ptype == 'normalize':

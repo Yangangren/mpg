@@ -13,7 +13,7 @@ import numpy as np
 from gym.envs.user_defined.toyota_env_PI_integrate.dynamics_and_models import EnvironmentModel
 
 from preprocessor import Preprocessor
-from utils.misc import TimerStat, args2envkwargs
+from utils.misc import TimerStat
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -30,43 +30,34 @@ class AMPCLearner(object):
         self.policy_with_value = policy_cls(self.args)
         self.batch_data = {}
         self.all_data = {}
-        self.M = self.args.M
         self.num_rollout_list_for_policy_update = self.args.num_rollout_list_for_policy_update
 
-        self.model = EnvironmentModel(**args2envkwargs(args))
+        self.model = EnvironmentModel()
         self.preprocessor = Preprocessor((self.args.obs_dim, ), self.args.obs_preprocess_type, self.args.reward_preprocess_type,
-                                         self.args.reward_scale, self.args.reward_shift, args=self.args,
-                                         gamma=self.args.gamma)
+                                         self.args.reward_scale, self.args.reward_shift, args=self.args, gamma=self.args.gamma)
         self.grad_timer = TimerStat()
         self.stats = {}
         self.info_for_buffer = {}
-        self.task = None
+        self.batch_size = self.args.replay_batch_size
 
     def get_stats(self):
         return self.stats
 
-    def get_states(self, processed_obses_ego, processed_obses_other, start_veh_num, grad):
-        PI_obses_other = self.policy_with_value.compute_PI(processed_obses_other)
-        PI_obses_other_sum = []
-        index = 0
-        for i in range(len(start_veh_num)):
-            PI_obses_other_sum.append(self.tf.math.reduce_sum(PI_obses_other[index: index+start_veh_num[i], :], keepdims=True, axis=0))
-            index += start_veh_num[i]
-        PI_obses_other_sum = self.tf.concat(PI_obses_other_sum, axis=0)
+    def get_states(self, mb_obs, mb_mask, grad=True):
+        mb_obs_other = self.tf.reshape(mb_obs[:, self.args.state_other_start_dim:], (-1, self.args.max_veh_num, self.args.state_per_other_dim))
+        mb_obs_other_encode = self.policy_with_value.compute_pi_encode(mb_obs_other, mb_mask)
         if not grad:
-            PI_obses_other_sum = self.tf.stop_gradient(PI_obses_other_sum)
-        processed_obses = self.tf.concat((processed_obses_ego, PI_obses_other_sum), axis=1)
-        return processed_obses
+            mb_obs_other_encode = self.tf.stop_gradient(mb_obs_other_encode)
+        mb_state = self.tf.concat((mb_obs[:, :self.args.state_other_start_dim], mb_obs_other_encode), axis=1)
+        return mb_state
 
     def get_info_for_buffer(self):
         return self.info_for_buffer
 
-    def get_batch_data(self, batch_data, rb, indexes):
-        self.batch_data = {'batch_obs_ego': batch_data[0].astype(np.float32),
-                           'batch_obs_other': batch_data[1].astype(np.float32),
-                           'batch_veh_num': batch_data[2].astype(np.int32),
-                           'batch_dones': batch_data[3].astype(np.float32),
-                           'batch_ref_index': batch_data[4].astype(np.int32)
+    def get_batch_data(self, batch_data):
+        self.batch_data = {'batch_obs': batch_data[0].astype(np.float32),
+                           'batch_future_n_point': batch_data[2].astype(np.float32),
+                           'batch_mask': batch_data[3].astype(np.float32)
                            }
 
     def get_weights(self):
@@ -85,38 +76,35 @@ class AMPCLearner(object):
         pf = init_pf * self.tf.pow(amplifier, self.tf.cast(ite//interval, self.tf.float32))
         return pf
 
-    def model_rollout_for_update(self, start_obses_ego, start_obses_other, start_veh_num, ite, mb_ref_index):
-        start_obses_ego = self.tf.tile(start_obses_ego, [self.M, 1])
-        start_obses_other = self.tf.tile(start_obses_other, [self.M, 1])
+    def model_rollout_for_update(self, mb_obs, ite, mb_future_n_point, mb_mask):
+        self.model.reset(mb_obs)
+        rewards_sum = self.tf.zeros((self.batch_size,))
+        punish_terms_for_training_sum = self.tf.zeros((self.batch_size,))
+        real_punish_terms_sum = self.tf.zeros((self.batch_size,))
+        veh2veh4real_sum = self.tf.zeros((self.batch_size,))
+        veh2road4real_sum = self.tf.zeros((self.batch_size,))
+        veh2line4real_sum = self.tf.zeros((self.batch_size,))
+        entropy_sum = self.tf.zeros((self.batch_size,))
 
-        self.model.reset(start_obses_ego, start_obses_other, start_veh_num, task='unify', ref_indexes=mb_ref_index)
-
-        rewards_sum = self.tf.zeros((start_obses_ego.shape[0],))
-        punish_terms_for_training_sum = self.tf.zeros((start_obses_ego.shape[0],))
-        real_punish_terms_sum = self.tf.zeros((start_obses_ego.shape[0],))
-        veh2veh4real_sum = self.tf.zeros((start_obses_ego.shape[0],))
-        veh2road4real_sum = self.tf.zeros((start_obses_ego.shape[0],))
-        veh2line4real_sum = self.tf.zeros((start_obses_ego.shape[0],))
         pf = self.punish_factor_schedule(ite)
-        obses_ego, obses_other = start_obses_ego, start_obses_other
-        processed_obses_ego, processed_obses_other = self.preprocessor.tf_process_obses_PI(obses_ego, obses_other)
-        # no supplement vehicle currently # todo: gradient disappear?
-        processed_obses = self.get_states(processed_obses_ego, processed_obses_other, start_veh_num, grad=True)
-        obj_v_pred = self.policy_with_value.compute_obj_v(processed_obses)
+        processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
+        mb_state = self.get_states(processed_mb_obs, mb_mask, grad=True)
+        obj_v_pred = self.policy_with_value.compute_obj_v(mb_state)
+        for step in self.tf.range(self.num_rollout_list_for_policy_update[0]):
+            step = self.tf.cast(step, self.tf.int64)
+            processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
+            mb_state = self.get_states(processed_mb_obs, mb_mask, grad=False)
+            actions, logps = self.policy_with_value.compute_action(mb_state)
+            mb_obs, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real, veh2line4real = \
+                self.model.rollout_out(actions, mb_future_n_point[:, :, step])
 
-        for _ in range(self.num_rollout_list_for_policy_update[0]):
-            processed_obses_ego, processed_obses_other = self.preprocessor.tf_process_obses_PI(obses_ego, obses_other)
-            processed_obses = self.get_states(processed_obses_ego, processed_obses_other, start_veh_num, grad=False)
-
-            actions, _ = self.policy_with_value.compute_action(processed_obses)
-            obses_ego, obses_other, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real, veh2line4real = self.model.rollout_out(actions)
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += self.args.reward_scale * punish_terms_for_training
             real_punish_terms_sum += self.args.reward_scale * real_punish_term
             veh2veh4real_sum += self.args.reward_scale * veh2veh4real
             veh2road4real_sum += self.args.reward_scale * veh2road4real
             veh2line4real_sum += self.args.reward_scale * veh2line4real
-
+            entropy_sum += -logps
         # obj v loss
         obj_v_loss = self.tf.reduce_mean(self.tf.square(obj_v_pred - self.tf.stop_gradient(-rewards_sum)))
         # con_v_loss = self.tf.reduce_mean(self.tf.square(con_v_pred - self.tf.stop_gradient(real_punish_terms_sum)))
@@ -132,49 +120,40 @@ class AMPCLearner(object):
         veh2road4real = self.tf.reduce_mean(veh2road4real_sum)
         veh2line4real = self.tf.reduce_mean(veh2line4real_sum)
 
+        policy_entropy = self.tf.reduce_mean(entropy_sum)
+
         return obj_v_loss, obj_loss, punish_term_for_training, punish_loss, pg_loss,\
-               real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf
+               real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy
 
     @tf.function
-    def forward_and_backward(self, mb_obs_ego, mb_obs_other, mb_veh_num, ite, mb_ref_index):
+    def forward_and_backward(self, mb_obs, ite, mb_future_n_point, mb_mask):
         with self.tf.GradientTape(persistent=True) as tape:
             obj_v_loss, obj_loss, punish_term_for_training, punish_loss, pg_loss, \
-            real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf\
-                = self.model_rollout_for_update(mb_obs_ego, mb_obs_other, mb_veh_num, ite, mb_ref_index)
-
+            real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy\
+                = self.model_rollout_for_update(mb_obs, ite, mb_future_n_point, mb_mask)
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
         with self.tf.name_scope('obj_v_gradient') as scope:
             obj_v_grad = tape.gradient(obj_v_loss, self.policy_with_value.obj_v.trainable_weights)
             PI_net_grad = tape.gradient(obj_v_loss, self.policy_with_value.PI_net.trainable_weights)
-
         # with self.tf.name_scope('con_v_gradient') as scope:
         #     con_v_grad = tape.gradient(con_v_loss, self.policy_with_value.con_v.trainable_weights)
 
         return pg_grad, obj_v_grad, PI_net_grad, obj_v_loss, obj_loss, \
                punish_term_for_training, punish_loss, pg_loss,\
-               real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf
+               real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy
 
-    def export_graph(self, writer):
-        mb_obs = self.batch_data['batch_obs']
-        self.tf.summary.trace_on(graph=True, profiler=False)
-        self.forward_and_backward(mb_obs, self.tf.convert_to_tensor(0, self.tf.int32),
-                                  self.tf.zeros((len(mb_obs),), dtype=self.tf.int32))
-        with writer.as_default():
-            self.tf.summary.trace_export(name="policy_forward_and_backward", step=0)
-
-    def compute_gradient(self, samples, rb, indexs, iteration):
-        self.get_batch_data(samples, rb, indexs)
-        mb_obs_ego = self.tf.constant(self.batch_data['batch_obs_ego'])
-        mb_obs_other = self.tf.constant(self.batch_data['batch_obs_other'])
-        mb_veh_num = self.tf.constant(self.batch_data['batch_veh_num'])
-        iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
-        mb_ref_index = self.tf.constant(self.batch_data['batch_ref_index'], self.tf.int32)
+    def compute_gradient(self, samples, iteration):
+        self.get_batch_data(samples)
+        mb_obs = self.tf.constant(self.batch_data['batch_obs'])
+        mb_future_n_point = self.tf.constant(self.batch_data['batch_future_n_point'])
+        mb_mask = self.tf.constant(self.batch_data['batch_mask'])
+        iteration = self.tf.constant(iteration, dtype=self.tf.int64)
         with self.grad_timer:
             pg_grad, obj_v_grad, PI_net_grad, obj_v_loss, obj_loss, \
             punish_term_for_training, punish_loss, pg_loss, \
-            real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf =\
-                self.forward_and_backward(mb_obs_ego, mb_obs_other, mb_veh_num, iteration, mb_ref_index)
+            real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy =\
+                self.forward_and_backward(mb_obs, iteration, mb_future_n_point, mb_mask)
 
             pg_grad, pg_grad_norm = self.tf.clip_by_global_norm(pg_grad, self.args.gradient_clip_norm)
             obj_v_grad, obj_v_grad_norm = self.tf.clip_by_global_norm(obj_v_grad, self.args.gradient_clip_norm)
@@ -197,7 +176,8 @@ class AMPCLearner(object):
             punish_factor=pf.numpy(),
             pg_grads_norm=pg_grad_norm.numpy(),
             obj_v_grad_norm=obj_v_grad_norm.numpy(),
-            PI_net_grad_norm=PI_net_grad_norm.numpy()
+            PI_net_grad_norm=PI_net_grad_norm.numpy(),
+            policy_entropy=policy_entropy.numpy(),
             # con_v_grad_norm=con_v_grad_norm.numpy()
         ))
 

@@ -71,23 +71,24 @@ def built_AMPC_parser():
 
     # env
     parser.add_argument('--env_id', default='CrossroadEnd2endPiIntegrate-v0')
-    parser.add_argument('--env_kwargs_num_future_data', type=int, default=3)
-    parser.add_argument('--env_kwargs_training_task', type=str, default='left')  # todo
+    parser.add_argument('--env_kwargs_future_point_num', type=int, default=None)
     parser.add_argument('--obs_dim', default=None)
     parser.add_argument('--act_dim', default=None)
+    parser.add_argument('--state_dim', default=None)
 
     parser.add_argument('--PI_in_dim', type=int, default=None)
     parser.add_argument('--PI_out_dim', type=int, default=None)
-    parser.add_argument('--max_veh_num', type=int, default=8)
+    parser.add_argument('--max_veh_num', type=int, default=None)
     parser.add_argument('--state_ego_dim', type=int, default=None)
     parser.add_argument('--state_track_dim', type=int, default=None)
     parser.add_argument('--state_light_dim', type=int, default=None)
     parser.add_argument('--state_task_dim', type=int, default=None)
-    parser.add_argument('--state_other_dim', type=int, default=None)
+    parser.add_argument('--state_ref_dim', type=int, default=None)
+    parser.add_argument('--state_per_other_dim', type=int, default=None)
+    parser.add_argument('--state_other_start_dim', type=int, default=None)
 
     # learner
     parser.add_argument('--alg_name', default='AMPC')
-    parser.add_argument('--M', type=int, default=1)
     parser.add_argument('--num_rollout_list_for_policy_update', type=list, default=[25])
     parser.add_argument('--gamma', type=float, default=1.)
     parser.add_argument('--gradient_clip_norm', type=float, default=10)
@@ -117,8 +118,8 @@ def built_AMPC_parser():
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
     parser.add_argument('--policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-4, 200000, 1e-5])
-    parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
+    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-4, 400000, 1e-5])
+    parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 400000, 1e-5])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
@@ -127,8 +128,8 @@ def built_AMPC_parser():
     parser.add_argument('--action_range', type=float, default=None)
 
     # model for PI_net
-    parser.add_argument('--PI_model_cls', type=str, default='MLP')
-    parser.add_argument('--PI_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
+    parser.add_argument('--PI_model_cls', type=str, default='PI')
+    parser.add_argument('--PI_lr_schedule', type=list, default=[8e-4, 400000, 1e-5])
     parser.add_argument('--PI_num_hidden_layers', type=int, default=2)
     parser.add_argument('--PI_num_hidden_units', type=int, default=256)
     parser.add_argument('--PI_hidden_activation', type=str, default='gelu')
@@ -136,21 +137,19 @@ def built_AMPC_parser():
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
-    parser.add_argument('--obs_ego_scale', type=list, default=None)
-    parser.add_argument('--obs_other_scale', type=list, default=None)
+    parser.add_argument('--obs_scale', type=list, default=None)
     parser.add_argument('--reward_preprocess_type', type=str, default='scale')
     parser.add_argument('--reward_scale', type=float, default=0.1)
     parser.add_argument('--reward_shift', type=float, default=0.)
 
     # optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
-    parser.add_argument('--max_iter', type=int, default=200000)
+    parser.add_argument('--max_iter', type=int, default=400000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=4)
+    parser.add_argument('--num_learners', type=int, default=20)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
-    parser.add_argument('--grads_max_reuse', type=int, default=0)  # todo: if not 0, then obj_v_grad and pg_grad will be 0
     parser.add_argument('--eval_interval', type=int, default=5000)
     parser.add_argument('--save_interval', type=int, default=5000)
     parser.add_argument('--log_interval', type=int, default=100)
@@ -168,25 +167,30 @@ def built_AMPC_parser():
 
     return parser.parse_args()
 
+
 def built_parser(alg_name):
     if alg_name == 'AMPC':
         args = built_AMPC_parser()
+        args.env_kwargs_future_point_num = args.num_rollout_list_for_policy_update[0]
         env = gym.make(args.env_id, **args2envkwargs(args))
         obs_space, act_space = env.observation_space, env.action_space
-        args.state_ego_dim, args.state_track_dim, args.state_other_dim = env.ego_info_dim, \
-                                                                         env.track_info_dim + env.per_path_info_dim * env.num_future_data, \
-                                                                         env.per_veh_info_dim
+        args.max_veh_num = env.veh_num
         args.state_task_dim = env.task_info_dim
-        args.state_light_dim = env.light_dim
-        args.PI_in_dim = env.per_veh_info_dim
-        args.PI_out_dim = args.max_veh_num * env.per_veh_info_dim + 1
-        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_ego_dim + args.state_track_dim + args.state_task_dim + args.state_light_dim,\
-                                     act_space.shape[0]
-        args.obs_ego_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
-                             [1., 1 / 15., 0.2] + [1., 1., 1 / 15., 1.] * args.env_kwargs_num_future_data + \
-                             [1.] + [1.]
-        args.obs_other_scale = [1 / 30., 1 / 30., 0.2, 1 / 180.]
+        args.state_light_dim = env.light_info_dim
+        args.state_ref_dim = env.ref_info_dim
+        args.state_per_other_dim = env.per_other_info_dim
+        args.state_other_start_dim = env.other_start_dim
+        args.PI_in_dim = env.per_other_info_dim
+        args.PI_out_dim = args.max_veh_num * env.per_other_info_dim + 1
+        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_other_start_dim, act_space.shape[0]
+        args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
+                         [1., 1., 1 / 15., 0.2] + \
+                         [1., 1.] + \
+                         [1., 1., 1.] + \
+                         [1., 1., 1.] + \
+                         [1 / 30., 1 / 30., 0.2, 1 / 180., 0.2, 0.5, 0.] * args.max_veh_num
         return args
+
 
 def main(alg_name):
     args = built_parser(alg_name)

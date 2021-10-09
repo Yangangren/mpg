@@ -11,9 +11,9 @@ import tensorflow as tf
 import numpy as np
 from tensorflow.keras.optimizers.schedules import PolynomialDecay
 
-from model import MLPNet
+from model import MLPNet, PINet
 
-NAME2MODELCLS = dict([('MLP', MLPNet),])
+NAME2MODELCLS = dict([('MLP', MLPNet), ('PI', PINet)])
 
 
 class Policy4Toyota(tf.Module):
@@ -49,11 +49,11 @@ class Policy4Toyota(tf.Module):
         # self.con_value_optimizer = self.tf.keras.optimizers.Adam(con_value_lr_schedule, name='conv_adam_opt')
 
         # add PI_net
-        PI_in_dim, PI_out_dim = self.args.PI_in_dim, self.args.PI_out_dim
+        item_num, per_item_dim, pi_out_dim = self.args.max_veh_num, self.args.state_per_other_dim, self.args.PI_out_dim
         n_hiddens, n_units, hidden_activation = self.args.PI_num_hidden_layers, self.args.PI_num_hidden_units, \
                                                 self.args.PI_hidden_activation
 
-        self.PI_net = PI_model_cls(PI_in_dim, n_hiddens, n_units, hidden_activation, PI_out_dim, name='PI_net',
+        self.PI_net = PI_model_cls(item_num, per_item_dim, n_hiddens, n_units, hidden_activation, pi_out_dim, name='PI_net',
                                        output_activation=self.args.PI_out_activation)
         PI_lr_schedule = PolynomialDecay(*self.args.PI_lr_schedule)
         self.PI_optimizer = self.tf.keras.optimizers.Adam(PI_lr_schedule, name='adam_opt_PI')
@@ -128,9 +128,10 @@ class Policy4Toyota(tf.Module):
             return tf.squeeze(self.obj_v(obs), axis=1)
 
     @tf.function
-    def compute_PI(self, obs):
-        with self.tf.name_scope('compute_PI') as scope:
-            return self.PI_net(obs)
+    def compute_pi_encode(self, obs, mask):
+        with self.tf.name_scope('compute_pi') as scope:
+            obs_encode = tf.reduce_sum(self.PI_net(obs), axis=1)
+            return obs_encode
 
 
 def test_policy():

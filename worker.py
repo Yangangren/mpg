@@ -35,7 +35,7 @@ class OffPolicyWorker(object):
         self.env = gym.make(env_id, **args2envkwargs(args))
         self.policy_with_value = policy_cls(self.args)
         self.batch_size = self.args.batch_size
-        self.obs = self.env.reset()
+        self.obs, self.info = self.env.reset()
         self.done = False
         self.preprocessor = Preprocessor((self.args.obs_dim, ), self.args.obs_preprocess_type, self.args.reward_preprocess_type,
                                           self.args.reward_scale, self.args.reward_shift, args=self.args, gamma=self.args.gamma)
@@ -86,14 +86,11 @@ class OffPolicyWorker(object):
     def sample(self):
         batch_data = []
         for _ in range(self.batch_size):
-            obs_ego = self.obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim]
-            obs_other = np.reshape(self.obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim:],
-                                  (-1, self.args.state_other_dim))
-            processed_obs_ego, processed_obs_other = self.preprocessor.process_obs_PI(obs_ego, obs_other)
-            PI_obs_other = tf.reduce_sum(self.policy_with_value.compute_PI(processed_obs_other), axis=0)
-            processed_obs = np.concatenate((processed_obs_ego, PI_obs_other.numpy()), axis=0)
+            processed_obs = self.preprocessor.process_obs(self.obs)
+            mask = self.info['mask']
+            state = self._get_state(processed_obs, mask)
             judge_is_nan([processed_obs])
-            action, logp = self.policy_with_value.compute_action(processed_obs[np.newaxis, :])
+            action, logp = self.policy_with_value.compute_action(state[np.newaxis, :])
             if self.explore_sigma is not None:
                 action += np.random.normal(0, self.explore_sigma, np.shape(action))
             try:
@@ -106,13 +103,12 @@ class OffPolicyWorker(object):
                 judge_is_nan([action])
                 raise ValueError
             obs_tp1, reward, self.done, info = self.env.step(action.numpy()[0])
-            processed_rew = self.preprocessor.process_rew(reward, self.done)
-            obs_ego_next = obs_tp1[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim]
-            obs_other_next = np.reshape(obs_tp1[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim:],
-                                        (-1, self.args.state_other_dim))
-            veh_num_next = info['veh_num']
-            batch_data.append((obs_ego_next, obs_other_next, veh_num_next, self.done, info['ref_index']))
-            self.obs = self.env.reset() if self.done else obs_tp1.copy()
+            batch_data.append((obs_tp1, self.done, info['future_n_point'], info['mask']))
+            if self.done:
+                self.obs, self.info = self.env.reset()
+            else:
+                self.obs = obs_tp1.copy()
+                self.info = info.copy()
             # self.env.render()
 
         if self.worker_id == 1 and self.sample_times % self.args.worker_log_interval == 0:
@@ -125,3 +121,9 @@ class OffPolicyWorker(object):
     def sample_with_count(self):
         batch_data = self.sample()
         return batch_data, len(batch_data)
+
+    def _get_state(self, obs, mask):
+        obs_other = np.reshape(obs[self.args.state_other_start_dim:], (-1, self.args.max_veh_num, self.args.state_per_other_dim))
+        obs_other_encode = tf.squeeze(self.policy_with_value.compute_pi_encode(obs_other, mask), axis=0)
+        state = np.concatenate((obs[:self.args.state_other_start_dim], obs_other_encode.numpy()), axis=0)
+        return state

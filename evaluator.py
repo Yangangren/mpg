@@ -55,47 +55,42 @@ class Evaluator(object):
     def load_weights(self, load_dir, iteration):
         self.policy_with_value.load_weights(load_dir, iteration)
 
-    def load_ppc_params(self, load_dir):
-        self.preprocessor.load_params(load_dir)
-
-    def evaluate_saved_model(self, model_load_dir, ppc_params_load_dir, iteration):
+    def evaluate_saved_model(self, model_load_dir, iteration):
         self.load_weights(model_load_dir, iteration)
-        self.load_ppc_params(ppc_params_load_dir)
+
+    def _get_state(self, obs, mask):
+        obs_other = np.reshape(obs[self.args.state_other_start_dim:], (-1, self.args.max_veh_num, self.args.state_per_other_dim))
+        obs_other_encode = tf.squeeze(self.policy_with_value.compute_pi_encode(obs_other, mask), axis=0)
+        state = np.concatenate((obs[:self.args.state_other_start_dim], obs_other_encode.numpy()), axis=0)
+        return state
 
     def run_an_episode(self, steps=None, render=True):
         reward_list = []
         reward_info_dict_list = []
         done = 0
-        obs = self.env.reset()
+        obs, info = self.env.reset()
         if render: self.env.render()
         if steps is not None:
             for _ in range(steps):
-                obs_ego = obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim]
-                obs_other = np.reshape(obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim:],
-                                       (-1, self.args.state_other_dim))
-                processed_obs_ego, processed_obs_other = self.preprocessor.tf_process_obses_PI(obs_ego, obs_other)
-                PI_obs_other = tf.reduce_sum(self.policy_with_value.compute_PI(processed_obs_other), axis=0)
-                processed_obs = np.concatenate((processed_obs_ego, PI_obs_other.numpy()), axis=0)
-
-                action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
+                processed_obs = self.preprocessor.process_obs(obs)
+                mask = info['mask']
+                state = self._get_state(processed_obs, mask)
+                action = self.policy_with_value.compute_mode(state[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render()
                 reward_list.append(reward)
         else:
             while not done:
-                obs_ego = obs[: self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim]
-                obs_other = np.reshape(obs[self.args.state_ego_dim + self.args.state_track_dim + self.args.state_light_dim + self.args.state_task_dim:],
-                                       (-1, self.args.state_other_dim))
-                processed_obs_ego, processed_obs_other = self.preprocessor.tf_process_obses_PI(obs_ego, obs_other)
-                PI_obs_other = tf.reduce_sum(self.policy_with_value.compute_PI(processed_obs_other), axis=0)
-                processed_obs = np.concatenate((processed_obs_ego, PI_obs_other.numpy()), axis=0)
-
-                action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
+                processed_obs = self.preprocessor.process_obs(obs)
+                mask = info['mask']
+                state = self._get_state(processed_obs, mask)
+                action = self.policy_with_value.compute_mode(state[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render()
                 reward_list.append(reward)
+
         episode_return = sum(reward_list)
         episode_len = len(reward_list)
         info_dict = dict()
@@ -122,9 +117,6 @@ class Evaluator(object):
 
     def set_weights(self, weights):
         self.policy_with_value.set_weights(weights)
-
-    def set_ppc_params(self, params):
-        self.preprocessor.set_params(params)
 
     def run_evaluation(self, iteration):
         with self.eval_timer:
