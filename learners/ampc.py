@@ -73,7 +73,6 @@ class AMPCLearner(object):
         return pf
 
     def model_rollout_for_update(self, start_obses, ite, mb_ref_index):
-        start_obses = self.tf.tile(start_obses, [self.M, 1])
         self.model.reset(start_obses, mb_ref_index)
         rewards_sum = self.tf.zeros((start_obses.shape[0],))
         punish_terms_for_training_sum = self.tf.zeros((start_obses.shape[0],))
@@ -89,7 +88,8 @@ class AMPCLearner(object):
         for _ in range(self.num_rollout_list_for_policy_update[0]):
             processed_obses = self.preprocessor.tf_process_obses(obses)
             actions, _ = self.policy_with_value.compute_action(processed_obses)
-            obses, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions)
+            adv_actions, _ = self.policy_with_value.compute_adv_action(processed_obses)
+            obses, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions, adv_actions)
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += self.args.reward_scale * punish_terms_for_training
             real_punish_terms_sum += self.args.reward_scale * real_punish_term
@@ -122,12 +122,13 @@ class AMPCLearner(object):
 
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
+            adv_pg_grad = tape.gradient(pg_loss, self.policy_with_value.adv_policy.trainable_weights) # todo: set a iteration number
         with self.tf.name_scope('obj_v_gradient') as scope:
             obj_v_grad = tape.gradient(obj_v_loss, self.policy_with_value.obj_v.trainable_weights)
         # with self.tf.name_scope('con_v_gradient') as scope:
         #     con_v_grad = tape.gradient(con_v_loss, self.policy_with_value.con_v.trainable_weights)
 
-        return pg_grad, obj_v_grad, obj_v_loss, obj_loss, \
+        return pg_grad, adv_pg_grad, obj_v_grad, obj_v_loss, obj_loss, \
                punish_term_for_training, punish_loss, pg_loss,\
                real_punish_term, veh2veh4real, veh2road4real, pf
 
@@ -146,12 +147,13 @@ class AMPCLearner(object):
         mb_ref_index = self.tf.constant(self.batch_data['batch_ref_index'], self.tf.int32)
 
         with self.grad_timer:
-            pg_grad, obj_v_grad, obj_v_loss, obj_loss, \
+            pg_grad, adv_pg_grad, obj_v_grad, obj_v_loss, obj_loss, \
             punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, pf =\
                 self.forward_and_backward(mb_obs, iteration, mb_ref_index)
 
             pg_grad, pg_grad_norm = self.tf.clip_by_global_norm(pg_grad, self.args.gradient_clip_norm)
+            adv_pg_grad, adv_pg_grad_norm = self.tf.clip_by_global_norm(adv_pg_grad, self.args.gradient_clip_norm)
             obj_v_grad, obj_v_grad_norm = self.tf.clip_by_global_norm(obj_v_grad, self.args.gradient_clip_norm)
             # con_v_grad, con_v_grad_norm = self.tf.clip_by_global_norm(con_v_grad, self.args.gradient_clip_norm)
 
@@ -169,11 +171,12 @@ class AMPCLearner(object):
             # con_v_loss=con_v_loss.numpy(),
             punish_factor=pf.numpy(),
             pg_grads_norm=pg_grad_norm.numpy(),
+            adv_pg_grads_norm=adv_pg_grad_norm.numpy(),
             obj_v_grad_norm=obj_v_grad_norm.numpy(),
             # con_v_grad_norm=con_v_grad_norm.numpy()
         ))
 
-        grads = obj_v_grad + pg_grad
+        grads = obj_v_grad + pg_grad + adv_pg_grad
 
         return list(map(lambda x: x.numpy(), grads))
 

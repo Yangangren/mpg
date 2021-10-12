@@ -74,6 +74,7 @@ def built_AMPC_parser():
     parser.add_argument('--env_kwargs_training_task', type=str, default='left')
     parser.add_argument('--obs_dim', default=None)
     parser.add_argument('--act_dim', default=None)
+    parser.add_argument('--adv_act_dim', default=None)
 
     # learner
     parser.add_argument('--alg_name', default='AMPC')
@@ -112,9 +113,16 @@ def built_AMPC_parser():
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
-    parser.add_argument('--deterministic_policy', default=True, action='store_true')
+    parser.add_argument('--deterministic_policy', default=True, action='store_true')        # todo: maybe a stochastic policy is better
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
     parser.add_argument('--action_range', type=float, default=None)
+
+    # adversarial policy
+    parser.add_argument('--adv_policy_model_cls', type=str, default='MLP')
+    parser.add_argument('--adv_policy_lr_schedule', type=list, default=[3e-4, 200000, 1e-5])
+    parser.add_argument('--adv_deterministic_policy', default=True, action='store_true')    # todo: maybe a stochastic policy is better
+    parser.add_argument('--adv_policy_out_activation', type=str, default='tanh')
+    parser.add_argument('--adv_action_range', type=float, default=None)
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
@@ -155,6 +163,7 @@ def built_parser(alg_name):
         env = gym.make(args.env_id, **args2envkwargs(args))
         obs_space, act_space = env.observation_space, env.action_space
         args.obs_dim, args.act_dim = obs_space.shape[0], act_space.shape[0]
+        args.adv_act_dim = env.per_veh_info_dim  # output the same noise for all surrounding vehicles
         args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
                          [1., 1 / 15., 0.2] + \
                          [1., 1., 1 / 15.] * args.env_kwargs_num_future_data + \
