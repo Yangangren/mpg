@@ -123,6 +123,7 @@ def built_AMPC_parser():
     parser.add_argument('--adv_deterministic_policy', default=True, action='store_true')    # todo: maybe a stochastic policy is better
     parser.add_argument('--adv_policy_out_activation', type=str, default='tanh')
     parser.add_argument('--adv_action_range', type=float, default=None)
+    parser.add_argument('--update_adv_interval', type=int, default=10)    # todo
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')

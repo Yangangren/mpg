@@ -82,7 +82,8 @@ class Policy4Toyota(tf.Module):
         obj_v_grad, policy_grad, adv_policy_grad = grads[:obj_v_len], grads[obj_v_len:obj_v_len+pg_len], grads[obj_v_len + pg_len:]
         self.obj_value_optimizer.apply_gradients(zip(obj_v_grad, self.obj_v.trainable_weights))
         self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
-        self.adv_policy_optimizer.apply_gradients(zip(adv_policy_grad, self.adv_policy.trainable_weights))
+        if iteration % self.args.update_adv_interval == 0:
+            self.adv_policy_optimizer.apply_gradients(zip(adv_policy_grad, self.adv_policy.trainable_weights))
 
     @tf.function
     def compute_mode(self, obs):
@@ -127,7 +128,7 @@ class Policy4Toyota(tf.Module):
             logits = self.adv_policy(obs)
             if self.args.adv_deterministic_policy:
                 mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
-                return self.args.action_range * self.tf.tanh(mean) if self.args.action_range is not None else mean, 0.
+                return self.args.adv_action_range * self.tf.tanh(mean) if self.args.adv_action_range is not None else mean, 0.
             else:
                 act_dist = self._logits2dist(logits)
                 actions = act_dist.sample()
