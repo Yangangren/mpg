@@ -69,7 +69,7 @@ def built_AMPC_parser():
     parser.add_argument('--off_policy', type=str, default=True)
 
     # env
-    parser.add_argument('--env_id', default='CrossroadEnd2end-v2')
+    parser.add_argument('--env_id', default='CrossroadEnd2endAdv-v0')
     parser.add_argument('--env_kwargs_num_future_data', type=int, default=0)
     parser.add_argument('--env_kwargs_training_task', type=str, default='left')
     parser.add_argument('--obs_dim', default=None)
@@ -135,7 +135,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=24)
+    parser.add_argument('--num_learners', type=int, default=12)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)

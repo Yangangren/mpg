@@ -10,7 +10,7 @@
 import logging
 
 import numpy as np
-from gym.envs.user_defined.toyota_env.dynamics_and_models import EnvironmentModel
+from gym.envs.user_defined.toyota_env_adversarial.dynamics_and_models import EnvironmentModel
 
 from preprocessor import Preprocessor
 from utils.misc import TimerStat, args2envkwargs
@@ -119,10 +119,11 @@ class AMPCLearner(object):
             obj_v_loss, obj_loss, punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, pf\
                 = self.model_rollout_for_update(mb_obs, ite, mb_ref_index)
+            adv_pg_loss = -pg_loss
 
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
-            adv_pg_grad = tape.gradient(pg_loss, self.policy_with_value.adv_policy.trainable_weights) # todo: set a iteration number
+            adv_pg_grad = tape.gradient(adv_pg_loss, self.policy_with_value.adv_policy.trainable_weights) # todo: set a iteration number
         with self.tf.name_scope('obj_v_gradient') as scope:
             obj_v_grad = tape.gradient(obj_v_loss, self.policy_with_value.obj_v.trainable_weights)
         # with self.tf.name_scope('con_v_gradient') as scope:
