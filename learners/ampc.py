@@ -119,7 +119,7 @@ class AMPCLearner(object):
             obj_v_loss, obj_loss, punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, pf\
                 = self.model_rollout_for_update(mb_obs, ite, mb_ref_index)
-            adv_pg_loss = -pg_loss
+            adv_pg_loss = -punish_loss
 
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)

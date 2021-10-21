@@ -51,11 +51,11 @@ def built_AMPC_parser():
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
         params.update(dict(test_dir=test_dir,
-                           test_iter_list=[65000],
+                           test_iter_list=[190000],
                            test_log_dir=test_log_dir,
-                           num_eval_episode=5,
+                           num_eval_episode=4,
                            eval_log_interval=1,
-                           fixed_steps=120))
+                           fixed_steps=None))
         for key, val in params.items():
             parser.add_argument("-" + key, default=val)
         return parser.parse_args()
@@ -100,9 +100,9 @@ def built_AMPC_parser():
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
 
     # tester and evaluator
-    parser.add_argument('--num_eval_episode', type=int, default=2)
+    parser.add_argument('--num_eval_episode', type=int, default=5)
     parser.add_argument('--eval_log_interval', type=int, default=1)
-    parser.add_argument('--fixed_steps', type=int, default=50)
+    parser.add_argument('--fixed_steps', type=int, default=60)
     parser.add_argument('--eval_render', type=bool, default=True)
 
     # policy and model
@@ -113,16 +113,16 @@ def built_AMPC_parser():
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
-    parser.add_argument('--deterministic_policy', default=True, action='store_true')        # todo: maybe a stochastic policy is better
+    parser.add_argument('--deterministic_policy', default=False, action='store_true')
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
-    parser.add_argument('--action_range', type=float, default=None)
+    parser.add_argument('--action_range', type=float, default=1.)
 
     # adversarial policy
     parser.add_argument('--adv_policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--adv_policy_lr_schedule', type=list, default=[3e-4, 200000, 1e-5])
-    parser.add_argument('--adv_deterministic_policy', default=True, action='store_true')    # todo: maybe a stochastic policy is better
+    parser.add_argument('--adv_policy_lr_schedule', type=list, default=[3e-5, 200000, 1e-6])
+    parser.add_argument('--adv_deterministic_policy', default=False, action='store_true')
     parser.add_argument('--adv_policy_out_activation', type=str, default='tanh')
-    parser.add_argument('--adv_action_range', type=float, default=None)
+    parser.add_argument('--adv_action_range', type=float, default=1.)
     parser.add_argument('--update_adv_interval', type=int, default=10)    # todo
 
     # preprocessor
@@ -136,7 +136,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=12)
+    parser.add_argument('--num_learners', type=int, default=16)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)

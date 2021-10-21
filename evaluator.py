@@ -63,47 +63,57 @@ class Evaluator(object):
         self.load_ppc_params(ppc_params_load_dir)
 
     def run_an_episode(self, steps=None, render=True):
-        reward_list = []
+        track_reward_list = []
+        total_reward_list = []
         reward_info_dict_list = []
         done = 0
-        obs = self.env.reset()
+        obs = self.env.reset(mode='evaluating')
         if render: self.env.render()
         if steps is not None:
             for _ in range(steps):
                 processed_obs = self.preprocessor.tf_process_obses(obs)
                 action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
+                total_reward = reward - self.args.init_punish_factor * info['reward_info']['punish_term_for_training']
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render()
-                reward_list.append(reward)
+                track_reward_list.append(reward)
+                total_reward_list.append(total_reward)
         else:
             while not done:
                 processed_obs = self.preprocessor.tf_process_obses(obs)
                 action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
+                total_reward = reward - self.args.init_punish_factor * info['reward_info']['punish_term_for_training']
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render()
-                reward_list.append(reward)
-        episode_return = sum(reward_list)
-        episode_len = len(reward_list)
+                track_reward_list.append(reward)
+                total_reward_list.append(total_reward)
+        episode_track_return = sum(track_reward_list)
+        episode_total_return = sum(total_reward_list)
+        episode_len = len(track_reward_list)
         info_dict = dict()
         for key in reward_info_dict_list[0].keys():
             info_key = list(map(lambda x: x[key], reward_info_dict_list))
             mean_key = sum(info_key) / len(info_key)
             info_dict.update({key: mean_key})
-        info_dict.update(dict(episode_return=episode_return,
-                              episode_len=episode_len))
-        return info_dict
+        return info_dict, episode_len, episode_track_return, episode_total_return
 
     def run_n_episode(self, n):
-        list_of_return = []
-        list_of_len = []
+        assert n >= 3, "n must be at least 3"
+        list_of_len, list_of_track_return, list_of_total_return = [], [], []
         list_of_info_dict = []
         for _ in range(n):
             logger.info('logging {}-th episode'.format(_))
-            info_dict = self.run_an_episode(self.args.fixed_steps, self.args.eval_render)
+            info_dict, episode_len, episode_track_return, episode_total_return = self.run_an_episode(self.args.fixed_steps, self.args.eval_render)
             list_of_info_dict.append(info_dict.copy())
-        n_info_dict = dict()
+            list_of_len.append(episode_len)
+            list_of_track_return.append(episode_track_return)
+            list_of_total_return.append(episode_total_return)
+        track_return = np.mean(sorted(list_of_track_return, reverse=True)[:3])
+        total_return = np.mean(sorted(list_of_total_return, reverse=True)[:3])
+        episode_len = np.mean(sorted(list_of_len, reverse=True))
+        n_info_dict = dict(track_return=track_return, total_return=total_return, episode_len=episode_len)
         for key in list_of_info_dict[0].keys():
             info_key = list(map(lambda x: x[key], list_of_info_dict))
             mean_key = sum(info_key) / len(info_key)

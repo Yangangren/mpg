@@ -91,15 +91,15 @@ class Policy4Toyota(tf.Module):
         mean, _ = self.tf.split(logits, num_or_size_splits=2, axis=-1)
         return self.args.action_range * self.tf.tanh(mean) if self.args.action_range is not None else mean
 
-    def _logits2dist(self, logits):
+    def _logits2dist(self, logits, action_range=None):
         mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
         act_dist = self.tfd.MultivariateNormalDiag(mean, self.tf.exp(log_std))
-        if self.args.action_range is not None:
+        if action_range is not None:
             act_dist = (
                 self.tfp.distributions.TransformedDistribution(
                     distribution=act_dist,
                     bijector=self.tfb.Chain(
-                        [self.tfb.Affine(scale_identity_multiplier=self.args.action_range),
+                        [self.tfb.Affine(scale_identity_multiplier=action_range),
                          self.tfb.Tanh()])
                 ))
         return act_dist
@@ -112,7 +112,7 @@ class Policy4Toyota(tf.Module):
                 mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
                 return self.args.action_range * self.tf.tanh(mean) if self.args.action_range is not None else mean, 0.
             else:
-                act_dist = self._logits2dist(logits)
+                act_dist = self._logits2dist(logits, self.args.action_range)
                 actions = act_dist.sample()
                 logps = act_dist.log_prob(actions)
                 return actions, logps
@@ -130,7 +130,7 @@ class Policy4Toyota(tf.Module):
                 mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
                 return self.args.adv_action_range * self.tf.tanh(mean) if self.args.adv_action_range is not None else mean, 0.
             else:
-                act_dist = self._logits2dist(logits)
+                act_dist = self._logits2dist(logits, self.args.adv_action_range)
                 actions = act_dist.sample()
                 logps = act_dist.log_prob(actions)
                 return actions, logps
