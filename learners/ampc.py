@@ -14,6 +14,9 @@ from gym.envs.user_defined.toyota_env_adversarial.dynamics_and_models import Env
 
 from preprocessor import Preprocessor
 from utils.misc import TimerStat, args2envkwargs
+import tensorflow_probability as tfp
+tfd = tfp.distributions
+tfb = tfp.bijectors
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +43,7 @@ class AMPCLearner(object):
         self.grad_timer = TimerStat()
         self.stats = {}
         self.info_for_buffer = {}
+        self.batch_size = self.args.replay_batch_size
 
     def get_stats(self):
         return self.stats
@@ -88,7 +92,22 @@ class AMPCLearner(object):
         for _ in range(self.num_rollout_list_for_policy_update[0]):
             processed_obses = self.preprocessor.tf_process_obses(obses)
             actions, _ = self.policy_with_value.compute_action(processed_obses)
-            adv_actions, _ = self.policy_with_value.compute_adv_action(processed_obses)
+            if self.args.noise_mode == 'adv_noise':
+                adv_actions = self.policy_with_value.compute_adv_action(processed_obses)
+                self.tf.print(adv_actions.shape)
+            elif self.args.noise_mode == 'no_noise':
+                adv_actions = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim * self.args.other_num))
+            elif self.args.noise_mode == 'rand_noise':    # todo
+                mean = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim * self.args.other_num))
+                std = self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim * self.args.other_num))
+                act_dist = tfp.distributions.MultivariateNormalDiag(mean, std)
+                act_dist = (tfp.distributions.TransformedDistribution(
+                        distribution=act_dist,
+                        bijector=tfb.Chain(
+                            [tfb.Affine(scale_identity_multiplier=self.args.adv_action_range),
+                             tfb.Tanh()])
+                    ))
+                adv_actions = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
             obses, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions, adv_actions)
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += self.args.reward_scale * punish_terms_for_training
@@ -121,9 +140,14 @@ class AMPCLearner(object):
                 = self.model_rollout_for_update(mb_obs, ite, mb_ref_index)
             adv_pg_loss = -punish_loss
 
-        with self.tf.name_scope('policy_gradient') as scope:
-            pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
-            adv_pg_grad = tape.gradient(adv_pg_loss, self.policy_with_value.adv_policy.trainable_weights) # todo: set a iteration number
+        if self.args.noise_mode == 'adv_noise':
+            with self.tf.name_scope('policy_gradient') as scope:
+                pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
+                adv_pg_grad = tape.gradient(adv_pg_loss, self.policy_with_value.adv_policy.trainable_weights)
+        else:
+            with self.tf.name_scope('policy_gradient') as scope:
+                pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
+                adv_pg_grad = [self.tf.zeros_like(pg_grad[0])]
         with self.tf.name_scope('obj_v_gradient') as scope:
             obj_v_grad = tape.gradient(obj_v_loss, self.policy_with_value.obj_v.trainable_weights)
         # with self.tf.name_scope('con_v_gradient') as scope:

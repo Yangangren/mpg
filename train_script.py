@@ -41,7 +41,7 @@ NAME2EVALUATORS = dict([('Evaluator', Evaluator), ('None', None)])
 
 def built_AMPC_parser():
     parser = argparse.ArgumentParser()
-
+    parser.add_argument('--noise_mode', type=str, default='adv_noise')  # adv_noise rand_noise no_noise
     parser.add_argument('--mode', type=str, default='training')  # training testing
     mode = parser.parse_args().mode
 
@@ -72,6 +72,8 @@ def built_AMPC_parser():
     parser.add_argument('--env_id', default='CrossroadEnd2endAdv-v0')
     parser.add_argument('--env_kwargs_num_future_data', type=int, default=0)
     parser.add_argument('--env_kwargs_training_task', type=str, default='left')
+    parser.add_argument('--other_num', type=int, default=None)
+    parser.add_argument('--per_other_dim', type=int, default=None)
     parser.add_argument('--obs_dim', default=None)
     parser.add_argument('--act_dim', default=None)
     parser.add_argument('--adv_act_dim', default=None)
@@ -140,7 +142,7 @@ def built_AMPC_parser():
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
-    parser.add_argument('--grads_max_reuse', type=int, default=0)  # todo: if not 0, then obj_v_grad and pg_grad will be 0
+    parser.add_argument('--grads_max_reuse', type=int, default=0)
     parser.add_argument('--eval_interval', type=int, default=5000)
     parser.add_argument('--save_interval', type=int, default=5000)
     parser.add_argument('--log_interval', type=int, default=100)
@@ -164,11 +166,13 @@ def built_parser(alg_name):
         env = gym.make(args.env_id, **args2envkwargs(args))
         obs_space, act_space = env.observation_space, env.action_space
         args.obs_dim, args.act_dim = obs_space.shape[0], act_space.shape[0]
-        args.adv_act_dim = env.per_veh_info_dim  # output the same noise for all surrounding vehicles
+        args.other_num = env.veh_num
+        args.per_other_dim = env.per_veh_info_dim
+        args.adv_act_dim = env.adv_action_dim # output the same noise for all surrounding vehicles
         args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
                          [1., 1 / 15., 0.2] + \
                          [1., 1., 1 / 15.] * args.env_kwargs_num_future_data + \
-                         [1 / 30., 1 / 30., 0.2, 1 / 180.] * env.veh_num
+                         [1 / 30., 1 / 30., 0.2, 1 / 180., 0.] * env.veh_num
         return args
 
 def main(alg_name):

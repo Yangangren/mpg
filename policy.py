@@ -28,33 +28,53 @@ class Policy4Toyota(tf.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        obs_dim, act_dim, adv_act_dim = self.args.obs_dim, self.args.act_dim, self.args.adv_act_dim
-        n_hiddens, n_units, hidden_activation = self.args.num_hidden_layers, self.args.num_hidden_units, self.args.hidden_activation
-        value_model_cls, policy_model_cls, adv_policy_model_cls = NAME2MODELCLS[self.args.value_model_cls], \
-                                            NAME2MODELCLS[self.args.policy_model_cls], \
-                                            NAME2MODELCLS[self.args.adv_policy_model_cls],
-        self.policy = policy_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, act_dim * 2, name='policy',
-                                       output_activation=self.args.policy_out_activation)
-        policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
-        self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
+        if self.args.noise_mode == 'adv_noise':
+            obs_dim, act_dim, adv_act_dim = self.args.obs_dim, self.args.act_dim, self.args.adv_act_dim
+            n_hiddens, n_units, hidden_activation = self.args.num_hidden_layers, self.args.num_hidden_units, self.args.hidden_activation
+            value_model_cls, policy_model_cls, adv_policy_model_cls = NAME2MODELCLS[self.args.value_model_cls], \
+                                                NAME2MODELCLS[self.args.policy_model_cls], \
+                                                NAME2MODELCLS[self.args.adv_policy_model_cls],
+            self.policy = policy_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, act_dim * 2, name='policy',
+                                           output_activation=self.args.policy_out_activation)
+            policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
+            self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
 
-        self.adv_policy = adv_policy_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, adv_act_dim * 2, name='adv_policy',
-                                       output_activation=self.args.adv_policy_out_activation)
-        adv_policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
-        self.adv_policy_optimizer = self.tf.keras.optimizers.Adam(adv_policy_lr_schedule, name='adv_adam_opt')
+            self.adv_policy = adv_policy_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, adv_act_dim * 2, name='adv_policy',
+                                           output_activation=self.args.adv_policy_out_activation)
+            adv_policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
+            self.adv_policy_optimizer = self.tf.keras.optimizers.Adam(adv_policy_lr_schedule, name='adv_adam_opt')
 
-        self.obj_v = value_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, 1, name='obj_v',
-                                     output_activation='softplus')
-        # self.con_v = value_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, 1, name='con_v')
+            self.obj_v = value_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, 1, name='obj_v',
+                                         output_activation='softplus')
+            # self.con_v = value_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, 1, name='con_v')
 
-        obj_value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
-        self.obj_value_optimizer = self.tf.keras.optimizers.Adam(obj_value_lr_schedule, name='objv_adam_opt')
+            obj_value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
+            self.obj_value_optimizer = self.tf.keras.optimizers.Adam(obj_value_lr_schedule, name='objv_adam_opt')
 
-        # con_value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
-        # self.con_value_optimizer = self.tf.keras.optimizers.Adam(con_value_lr_schedule, name='conv_adam_opt')
+            # con_value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
+            # self.con_value_optimizer = self.tf.keras.optimizers.Adam(con_value_lr_schedule, name='conv_adam_opt')
 
-        self.models = (self.obj_v, self.policy, self.adv_policy)
-        self.optimizers = (self.obj_value_optimizer, self.policy_optimizer, self.adv_policy_optimizer)
+            self.models = (self.obj_v, self.policy, self.adv_policy)
+            self.optimizers = (self.obj_value_optimizer, self.policy_optimizer, self.adv_policy_optimizer)
+
+        else:
+            obs_dim, act_dim = self.args.obs_dim, self.args.act_dim
+            n_hiddens, n_units, hidden_activation = self.args.num_hidden_layers, self.args.num_hidden_units, self.args.hidden_activation
+            value_model_cls, policy_model_cls = NAME2MODELCLS[self.args.value_model_cls], \
+                                                NAME2MODELCLS[self.args.policy_model_cls]
+            self.policy = policy_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, act_dim * 2, name='policy',
+                                           output_activation=self.args.policy_out_activation)
+            policy_lr_schedule = PolynomialDecay(*self.args.policy_lr_schedule)
+            self.policy_optimizer = self.tf.keras.optimizers.Adam(policy_lr_schedule, name='adam_opt')
+
+            self.obj_v = value_model_cls(obs_dim, n_hiddens, n_units, hidden_activation, 1, name='obj_v',
+                                         output_activation='softplus')
+
+            obj_value_lr_schedule = PolynomialDecay(*self.args.value_lr_schedule)
+            self.obj_value_optimizer = self.tf.keras.optimizers.Adam(obj_value_lr_schedule, name='objv_adam_opt')
+
+            self.models = (self.obj_v, self.policy,)
+            self.optimizers = (self.obj_value_optimizer, self.policy_optimizer)
 
     def save_weights(self, save_dir, iteration):
         model_pairs = [(model.name, model) for model in self.models]
@@ -82,7 +102,7 @@ class Policy4Toyota(tf.Module):
         obj_v_grad, policy_grad, adv_policy_grad = grads[:obj_v_len], grads[obj_v_len:obj_v_len+pg_len], grads[obj_v_len + pg_len:]
         self.obj_value_optimizer.apply_gradients(zip(obj_v_grad, self.obj_v.trainable_weights))
         self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
-        if iteration % self.args.update_adv_interval == 0:
+        if (self.args.noise_mode == 'adv_noise') and (iteration % self.args.update_adv_interval == 0):
             self.adv_policy_optimizer.apply_gradients(zip(adv_policy_grad, self.adv_policy.trainable_weights))
 
     @tf.function
@@ -93,6 +113,21 @@ class Policy4Toyota(tf.Module):
 
     def _logits2dist(self, logits, action_range=None):
         mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
+        act_dist = self.tfd.MultivariateNormalDiag(mean, self.tf.exp(log_std))
+        if action_range is not None:
+            act_dist = (
+                self.tfp.distributions.TransformedDistribution(
+                    distribution=act_dist,
+                    bijector=self.tfb.Chain(
+                        [self.tfb.Affine(scale_identity_multiplier=action_range),
+                         self.tfb.Tanh()])
+                ))
+        return act_dist
+
+    def _logits2dist_adv(self, logits, action_range=None):
+        mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
+        mean = tf.tile(mean, [1, self.args.other_num])
+        log_std = tf.tile(log_std, [1, self.args.other_num])
         act_dist = self.tfd.MultivariateNormalDiag(mean, self.tf.exp(log_std))
         if action_range is not None:
             act_dist = (
@@ -130,7 +165,7 @@ class Policy4Toyota(tf.Module):
                 mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
                 return self.args.adv_action_range * self.tf.tanh(mean) if self.args.adv_action_range is not None else mean, 0.
             else:
-                act_dist = self._logits2dist(logits, self.args.adv_action_range)
+                act_dist = self._logits2dist_adv(logits, self.args.adv_action_range)
                 actions = act_dist.sample()
                 logps = act_dist.log_prob(actions)
                 return actions, logps
