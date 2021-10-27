@@ -59,36 +59,38 @@ class Evaluator(object):
         self.load_weights(model_load_dir, iteration)
 
     def _get_state(self, obs, mask):
-        obs_other = np.reshape(obs[self.args.state_other_start_dim:], (-1, self.args.max_veh_num, self.args.state_per_other_dim))
-        obs_other_encode = tf.squeeze(self.policy_with_value.compute_pi_encode(obs_other, mask), axis=0)
-        state = np.concatenate((obs[:self.args.state_other_start_dim], obs_other_encode.numpy()), axis=0)
-        return state
+        obs_other, weights = self.policy_with_value.compute_attn(obs[self.args.other_start_dim:][np.newaxis, :],
+                                                                 mask[np.newaxis, :])
+        obs_other = obs_other.numpy()[0]
+        weights = weights.numpy()[0]
+        state = np.concatenate((obs[:self.args.other_start_dim], obs_other), axis=0)
+        return state, weights
 
     def run_an_episode(self, steps=None, render=True):
         reward_list = []
         reward_info_dict_list = []
         done = 0
         obs, info = self.env.reset()
-        if render: self.env.render()
+        if render: self.env.render(weights=np.zeros((16,)))
         if steps is not None:
             for _ in range(steps):
                 processed_obs = self.preprocessor.process_obs(obs)
                 mask = info['mask']
-                state = self._get_state(processed_obs, mask)
+                state, attn_weights = self._get_state(processed_obs, mask)
                 action = self.policy_with_value.compute_mode(state[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 reward_info_dict_list.append(info['reward_info'])
-                if render: self.env.render()
+                if render: self.env.render(weights=attn_weights)
                 reward_list.append(reward)
         else:
             while not done:
                 processed_obs = self.preprocessor.process_obs(obs)
                 mask = info['mask']
-                state = self._get_state(processed_obs, mask)
+                state, attn_weights = self._get_state(processed_obs, mask)
                 action = self.policy_with_value.compute_mode(state[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 reward_info_dict_list.append(info['reward_info'])
-                if render: self.env.render()
+                if render: self.env.render(weights=attn_weights)
                 reward_list.append(reward)
 
         episode_return = sum(reward_list)
@@ -132,6 +134,8 @@ class Evaluator(object):
             logger.info('Evaluator_info: {}, {}'.format(self.get_stats(),n_info_dict))
         self.eval_times += 1
 
+    def get_eval_times(self):
+        return self.eval_times
 
 def test_trained_model(model_dir, ppc_params_dir, iteration):
     from train_script import built_mixedpg_parser

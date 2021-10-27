@@ -114,23 +114,6 @@ class Preprocessor(object):
         else:
             return obs
 
-    # def process_obs_PI(self, obs_ego, obs_other):
-    #     if self.obs_ptype == 'scale':
-    #         processed_obs_ego = obs_ego * self.obs_ego_scale
-    #         processed_obs_other = obs_other * self.obs_other_scale
-    #         return processed_obs_ego, processed_obs_other
-    #
-    # def tf_process_obses_PI(self, obses_ego, obses_other):
-    #     with tf.name_scope('obs_process') as scope:
-    #         if self.obs_ptype == 'scale':
-    #             processed_obses_ego = obses_ego * tf.convert_to_tensor(self.obs_ego_scale, dtype=tf.float32)
-    #             processed_obses_other = obses_other * tf.convert_to_tensor(self.obs_other_scale, dtype=tf.float32)
-    #             return processed_obses_ego, processed_obses_other
-    #         else:
-    #             print('no scale')
-    #             return tf.convert_to_tensor(obses_ego, dtype=tf.float32), \
-    #                    tf.convert_to_tensor(obses_other, dtype=tf.float32)
-
     def np_process_obses(self, obses):
         if self.obs_ptype == 'normalize':
             obses = np.clip((obses - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob, self.clipob)

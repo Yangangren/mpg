@@ -29,7 +29,6 @@ from utils.misc import TimerStat, args2envkwargs
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 NAME2WORKERCLS = dict([('OffPolicyWorker', OffPolicyWorker)])
 NAME2LEARNERCLS = dict([('AMPC', AMPCLearner)])
@@ -76,16 +75,9 @@ def built_AMPC_parser():
     parser.add_argument('--act_dim', default=None)
     parser.add_argument('--state_dim', default=None)
 
-    parser.add_argument('--PI_in_dim', type=int, default=None)
-    parser.add_argument('--PI_out_dim', type=int, default=None)
-    parser.add_argument('--max_veh_num', type=int, default=None)
-    parser.add_argument('--state_ego_dim', type=int, default=None)
-    parser.add_argument('--state_track_dim', type=int, default=None)
-    parser.add_argument('--state_light_dim', type=int, default=None)
-    parser.add_argument('--state_task_dim', type=int, default=None)
-    parser.add_argument('--state_ref_dim', type=int, default=None)
-    parser.add_argument('--state_per_other_dim', type=int, default=None)
-    parser.add_argument('--state_other_start_dim', type=int, default=None)
+    parser.add_argument('--other_start_dim', type=int, default=None)
+    parser.add_argument('--per_other_dim', type=int, default=None)
+    parser.add_argument('--other_number', type=int, default=None)
 
     # learner
     parser.add_argument('--alg_name', default='AMPC')
@@ -113,7 +105,7 @@ def built_AMPC_parser():
     parser.add_argument('--num_eval_episode', type=int, default=2)
     parser.add_argument('--eval_log_interval', type=int, default=1)
     parser.add_argument('--fixed_steps', type=int, default=50)
-    parser.add_argument('--eval_render', type=bool, default=True)
+    parser.add_argument('--eval_render', type=bool, default=False)
 
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
@@ -125,15 +117,14 @@ def built_AMPC_parser():
     parser.add_argument('--hidden_activation', type=str, default='gelu')
     parser.add_argument('--deterministic_policy', default=True, action='store_true')
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
-    parser.add_argument('--action_range', type=float, default=None)
+    parser.add_argument('--action_range', type=float, default=1.)
 
-    # model for PI_net
-    parser.add_argument('--PI_model_cls', type=str, default='PI')
-    parser.add_argument('--PI_lr_schedule', type=list, default=[8e-4, 400000, 1e-5])
-    parser.add_argument('--PI_num_hidden_layers', type=int, default=2)
-    parser.add_argument('--PI_num_hidden_units', type=int, default=256)
-    parser.add_argument('--PI_hidden_activation', type=str, default='gelu')
-    parser.add_argument('--PI_out_activation', type=str, default='linear')
+    # model for attn_net
+    parser.add_argument('--attn_model_cls', type=str, default='Attention')
+    parser.add_argument('--attn_in_per_dim', type=int, default=None)
+    parser.add_argument('--attn_in_total_dim', type=int, default=None)
+    parser.add_argument('--attn_out_dim', type=int, default=64)
+    parser.add_argument('--attn_lr_schedule', type=list, default=[8e-4, 400000, 1e-5])
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
@@ -174,21 +165,19 @@ def built_parser(alg_name):
         args.env_kwargs_future_point_num = args.num_rollout_list_for_policy_update[0]
         env = gym.make(args.env_id, **args2envkwargs(args))
         obs_space, act_space = env.observation_space, env.action_space
-        args.max_veh_num = env.veh_num
-        args.state_task_dim = env.task_info_dim
-        args.state_light_dim = env.light_info_dim
-        args.state_ref_dim = env.ref_info_dim
-        args.state_per_other_dim = env.per_other_info_dim
-        args.state_other_start_dim = env.other_start_dim
-        args.PI_in_dim = env.per_other_info_dim
-        args.PI_out_dim = args.max_veh_num * env.per_other_info_dim + 1
-        args.obs_dim, args.act_dim = args.PI_out_dim + args.state_other_start_dim, act_space.shape[0]
+        args.per_other_dim = env.per_other_info_dim
+        args.other_start_dim = env.other_start_dim
+        args.other_number = env.other_number
+        args.attn_in_per_dim = env.per_other_info_dim
+        args.attn_in_total_dim = env.per_other_info_dim * env.other_number
+        args.obs_dim, args.act_dim = obs_space.shape[0], act_space.shape[0]
+        args.state_dim = env.other_start_dim + args.attn_out_dim
         args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
                          [1., 1., 1 / 15., 0.2] + \
                          [1., 1.] + \
                          [1., 1., 1.] + \
                          [1., 1., 1.] + \
-                         [1 / 30., 1 / 30., 0.2, 1 / 180., 0.2, 0.5, 0.] * args.max_veh_num
+                         [1 / 30., 1 / 30., 0.2, 1 / 180., 0.2, 0.5, 0.] * args.other_number
         return args
 
 

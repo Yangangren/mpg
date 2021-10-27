@@ -71,6 +71,13 @@ class OffPolicyWorker(object):
         self.iteration = iteration
         self.policy_with_value.apply_gradients(tf.constant(iteration, dtype=tf.int32), grads)
 
+    def _get_state(self, obs, mask):
+        obs_other, _ = self.policy_with_value.compute_attn(obs[self.args.other_start_dim:][np.newaxis, :],
+                                                           mask[np.newaxis, :])
+        obs_other = obs_other.numpy()[0]
+        state = np.concatenate((obs[:self.args.other_start_dim], obs_other), axis=0)
+        return state
+
     def get_ppc_params(self):
         return self.preprocessor.get_params()
 
@@ -121,9 +128,3 @@ class OffPolicyWorker(object):
     def sample_with_count(self):
         batch_data = self.sample()
         return batch_data, len(batch_data)
-
-    def _get_state(self, obs, mask):
-        obs_other = np.reshape(obs[self.args.state_other_start_dim:], (-1, self.args.max_veh_num, self.args.state_per_other_dim))
-        obs_other_encode = tf.squeeze(self.policy_with_value.compute_pi_encode(obs_other, mask), axis=0)
-        state = np.concatenate((obs[:self.args.state_other_start_dim], obs_other_encode.numpy()), axis=0)
-        return state

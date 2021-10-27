@@ -63,7 +63,6 @@ class ReplayBuffer(object):
             dones.append(done)
             future_points.append(np.array(future_point, copy=False))
             masks.append(np.array(mask, copy=False))
-        # print(vehs_mode_next.shape, obses_others_next.shape, np.sum(np.array(vehs_num_next)))
         return np.array(obses), np.array(dones),  np.array(future_points), np.array(masks)
 
     def sample_idxes(self, batch_size):
