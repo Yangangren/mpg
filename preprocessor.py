@@ -99,26 +99,13 @@ class Preprocessor(object):
             return rew
 
     def process_obs(self, obs):
-        if self.obs_ptype == 'normalize':
-            if self.num_agent is not None:
-                self.ob_rms.update(obs)
-                obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob, self.clipob)
-                return obs
-            else:
-                self.ob_rms.update(np.array([obs]))
-                obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob,
-                              self.clipob)
-                return obs
-        elif self.obs_ptype == 'scale':
+        if self.obs_scale:
             return obs * self.obs_scale
         else:
             return obs
 
     def np_process_obses(self, obses):
-        if self.obs_ptype == 'normalize':
-            obses = np.clip((obses - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob, self.clipob)
-            return obses
-        elif self.obs_ptype == 'scale':
+        if self.obs_scale:
             return obses * self.obs_scale
         else:
             return obses
@@ -133,18 +120,10 @@ class Preprocessor(object):
             return rewards
 
     def tf_process_obses(self, obses):
-        with tf.name_scope('obs_process') as scope:
-            if self.obs_ptype == 'normalize':
-                obses = tf.clip_by_value(
-                    (obses - self.ob_rms.tf_mean) / tf.sqrt(self.ob_rms.tf_var + tf.constant(self.epsilon)),
-                    -self.clipob,
-                    self.clipob)
-                return obses
-            elif self.obs_ptype == 'scale':
-                return obses * tf.convert_to_tensor(self.obs_scale, dtype=tf.float32)
-
-            else:
-                return tf.convert_to_tensor(obses, dtype=tf.float32)
+        if self.obs_scale:
+            return obses * tf.convert_to_tensor(self.obs_scale, dtype=tf.float32)
+        else:
+            return tf.convert_to_tensor(obses, dtype=tf.float32)
 
     def tf_process_rewards(self, rewards):
         with tf.name_scope('reward_process') as scope:

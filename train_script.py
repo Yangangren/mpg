@@ -90,14 +90,14 @@ def built_AMPC_parser():
     parser.add_argument('--pf_amplifier', type=float, default=1.)
 
     # worker
-    parser.add_argument('--batch_size', type=int, default=512)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--worker_log_interval', type=int, default=5)
     parser.add_argument('--explore_sigma', type=float, default=None)
 
     # buffer
     parser.add_argument('--max_buffer_size', type=int, default=50000)
-    parser.add_argument('--replay_starts', type=int, default=3000)
-    parser.add_argument('--replay_batch_size', type=int, default=256)
+    parser.add_argument('--replay_starts', type=int, default=1500)  # use a small value for debug
+    parser.add_argument('--replay_batch_size', type=int, default=512)
     parser.add_argument('--replay_alpha', type=float, default=0.6)
     parser.add_argument('--replay_beta', type=float, default=0.4)
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
@@ -116,7 +116,7 @@ def built_AMPC_parser():
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
-    parser.add_argument('--deterministic_policy', default=True, action='store_true')  # todo
+    parser.add_argument('--deterministic_policy', default=False)
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
     parser.add_argument('--action_range', type=float, default=1.)
 
@@ -137,9 +137,9 @@ def built_AMPC_parser():
     # optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=200000)
-    parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=20)
-    parser.add_argument('--num_buffers', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=12)  # use a small value for debug
+    parser.add_argument('--num_learners', type=int, default=12)
+    parser.add_argument('--num_buffers', type=int, default=12)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
     parser.add_argument('--eval_interval', type=int, default=5000)
@@ -155,7 +155,6 @@ def built_AMPC_parser():
     parser.add_argument('--model_dir', type=str, default=results_dir + '/models')
     parser.add_argument('--model_load_dir', type=str, default=None)
     parser.add_argument('--model_load_ite', type=int, default=None)
-    parser.add_argument('--ppc_load_dir', type=str, default=None)
 
     return parser.parse_args()
 
@@ -200,9 +199,6 @@ def main(alg_name):
         if args.model_load_dir is not None:
             logger.info('loading model')
             trainer.load_weights(args.model_load_dir, args.model_load_ite)
-        if args.ppc_load_dir is not None:
-            logger.info('loading ppc parameter')
-            trainer.load_ppc_params(args.ppc_load_dir)
         trainer.train()
 
     elif args.mode == 'testing':

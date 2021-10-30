@@ -89,7 +89,7 @@ class AMPCLearner(object):
         mb_state = self.get_states(processed_mb_obs, mb_mask)
         obj_v_pred = self.policy_with_value.compute_obj_v(self.tf.stop_gradient(mb_state))
 
-        for i in self.tf.range(self.num_rollout_list_for_policy_update[0]):
+        for i in range(self.num_rollout_list_for_policy_update[0]):
             processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
             mb_state = self.get_states(processed_mb_obs, mb_mask)
             actions, logps = self.policy_with_value.compute_action(mb_state)
