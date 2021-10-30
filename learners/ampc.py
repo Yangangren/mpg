@@ -89,13 +89,13 @@ class AMPCLearner(object):
         mb_state = self.get_states(processed_mb_obs, mb_mask)
         obj_v_pred = self.policy_with_value.compute_obj_v(self.tf.stop_gradient(mb_state))
 
-        for step in self.tf.range(self.num_rollout_list_for_policy_update[0]):
+        for i in self.tf.range(self.num_rollout_list_for_policy_update[0]):
             processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
             mb_state = self.get_states(processed_mb_obs, mb_mask)
             actions, logps = self.policy_with_value.compute_action(mb_state)
 
             mb_obs, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real, veh2line4real = \
-                self.model.rollout_out(actions, mb_future_n_point[:, :, step])
+                self.model.rollout_out(actions, mb_future_n_point[:, :, i])
 
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += self.args.reward_scale * punish_terms_for_training
@@ -176,7 +176,7 @@ class AMPCLearner(object):
             punish_factor=pf.numpy(),
             pg_grads_norm=pg_grad_norm.numpy(),
             obj_v_grad_norm=obj_v_grad_norm.numpy(),
-            PI_net_grad_norm=attn_net_grad_norm.numpy(),
+            attn_net_grad_norm=attn_net_grad_norm.numpy(),
             policy_entropy=policy_entropy.numpy(),
             # con_v_grad_norm=con_v_grad_norm.numpy()
         ))

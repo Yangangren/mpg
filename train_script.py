@@ -55,7 +55,8 @@ def built_AMPC_parser():
                            test_log_dir=test_log_dir,
                            num_eval_episode=5,
                            eval_log_interval=1,
-                           fixed_steps=120))
+                           fixed_steps=150,
+                           eval_render=True))
         for key, val in params.items():
             parser.add_argument("-" + key, default=val)
         return parser.parse_args()
@@ -84,7 +85,7 @@ def built_AMPC_parser():
     parser.add_argument('--num_rollout_list_for_policy_update', type=list, default=[25])
     parser.add_argument('--gamma', type=float, default=1.)
     parser.add_argument('--gradient_clip_norm', type=float, default=10)
-    parser.add_argument('--init_punish_factor', type=float, default=10.)
+    parser.add_argument('--init_punish_factor', type=float, default=30.)
     parser.add_argument('--pf_enlarge_interval', type=int, default=20000)
     parser.add_argument('--pf_amplifier', type=float, default=1.)
 
@@ -110,12 +111,12 @@ def built_AMPC_parser():
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
     parser.add_argument('--policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-4, 400000, 1e-5])
-    parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 400000, 1e-5])
+    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-4, 200000, 1e-5])
+    parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
-    parser.add_argument('--deterministic_policy', default=True, action='store_true')
+    parser.add_argument('--deterministic_policy', default=True, action='store_true')  # todo
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
     parser.add_argument('--action_range', type=float, default=1.)
 
@@ -124,7 +125,7 @@ def built_AMPC_parser():
     parser.add_argument('--attn_in_per_dim', type=int, default=None)
     parser.add_argument('--attn_in_total_dim', type=int, default=None)
     parser.add_argument('--attn_out_dim', type=int, default=64)
-    parser.add_argument('--attn_lr_schedule', type=list, default=[8e-4, 400000, 1e-5])
+    parser.add_argument('--attn_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
@@ -135,7 +136,7 @@ def built_AMPC_parser():
 
     # optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
-    parser.add_argument('--max_iter', type=int, default=400000)
+    parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--num_learners', type=int, default=20)
     parser.add_argument('--num_buffers', type=int, default=4)
