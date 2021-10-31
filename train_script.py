@@ -41,12 +41,13 @@ NAME2EVALUATORS = dict([('Evaluator', Evaluator), ('None', None)])
 
 def built_AMPC_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--noise_mode', type=str, default='adv_noise')  # adv_noise rand_noise no_noise
+    parser.add_argument('--noise_mode', type=str, default='no_noise')  # adv_noise rand_noise no_noise
+    parser.add_argument('--noise_bound', type=list, default=[[0., 0., 2., 0.0]])
     parser.add_argument('--mode', type=str, default='training')  # training testing
     mode = parser.parse_args().mode
 
     if mode == 'testing':
-        test_dir = './results/toyota_realcar/experiment-2020-12-28-22-54-48'
+        test_dir = './results/CrossroadEnd2endAdv-v0/experiment-2021-10-28-23-24-55'
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
@@ -55,7 +56,8 @@ def built_AMPC_parser():
                            test_log_dir=test_log_dir,
                            num_eval_episode=4,
                            eval_log_interval=1,
-                           fixed_steps=None))
+                           fixed_steps=None,
+                           eval_render=True))
         for key, val in params.items():
             parser.add_argument("-" + key, default=val)
         return parser.parse_args()
@@ -96,16 +98,16 @@ def built_AMPC_parser():
     # buffer
     parser.add_argument('--max_buffer_size', type=int, default=50000)
     parser.add_argument('--replay_starts', type=int, default=3000)
-    parser.add_argument('--replay_batch_size', type=int, default=512)
+    parser.add_argument('--replay_batch_size', type=int, default=256)
     parser.add_argument('--replay_alpha', type=float, default=0.6)
     parser.add_argument('--replay_beta', type=float, default=0.4)
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
 
     # tester and evaluator
-    parser.add_argument('--num_eval_episode', type=int, default=5)
+    parser.add_argument('--num_eval_episode', type=int, default=4)
     parser.add_argument('--eval_log_interval', type=int, default=1)
-    parser.add_argument('--fixed_steps', type=int, default=60)
-    parser.add_argument('--eval_render', type=bool, default=True)
+    parser.add_argument('--fixed_steps', type=int, default=60) # todo
+    parser.add_argument('--eval_render', type=bool, default=False)
 
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
@@ -138,7 +140,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=16)
+    parser.add_argument('--num_learners', type=int, default=25)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)

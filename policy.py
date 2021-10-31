@@ -127,6 +127,8 @@ class Policy4Toyota(tf.Module):
     def _logits2dist_adv(self, logits, action_range=None):
         mean, log_std = self.tf.split(logits, num_or_size_splits=2, axis=-1)
         mean = tf.tile(mean, [1, self.args.other_num])
+        zeros_mean = tf.zeros_like(mean)
+        mean = zeros_mean * mean
         log_std = tf.tile(log_std, [1, self.args.other_num])
         act_dist = self.tfd.MultivariateNormalDiag(mean, self.tf.exp(log_std))
         if action_range is not None:

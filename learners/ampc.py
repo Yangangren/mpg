@@ -36,7 +36,7 @@ class AMPCLearner(object):
         self.M = self.args.M
         self.num_rollout_list_for_policy_update = self.args.num_rollout_list_for_policy_update
 
-        self.model = EnvironmentModel(**args2envkwargs(args))
+        self.model = EnvironmentModel(**args2envkwargs(args), noise_bound=self.args.noise_bound)
         self.preprocessor = Preprocessor((self.args.obs_dim, ), self.args.obs_preprocess_type, self.args.reward_preprocess_type,
                                          self.args.obs_scale, self.args.reward_scale, self.args.reward_shift,
                                          gamma=self.args.gamma)
@@ -93,8 +93,7 @@ class AMPCLearner(object):
             processed_obses = self.preprocessor.tf_process_obses(obses)
             actions, _ = self.policy_with_value.compute_action(processed_obses)
             if self.args.noise_mode == 'adv_noise':
-                adv_actions = self.policy_with_value.compute_adv_action(processed_obses)
-                self.tf.print(adv_actions.shape)
+                adv_actions, _ = self.policy_with_value.compute_adv_action(processed_obses)
             elif self.args.noise_mode == 'no_noise':
                 adv_actions = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim * self.args.other_num))
             elif self.args.noise_mode == 'rand_noise':    # todo
@@ -107,7 +106,7 @@ class AMPCLearner(object):
                             [tfb.Affine(scale_identity_multiplier=self.args.adv_action_range),
                              tfb.Tanh()])
                     ))
-                adv_actions = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
+                adv_actions = act_dist.sample()
             obses, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real = self.model.rollout_out(actions, adv_actions)
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += self.args.reward_scale * punish_terms_for_training
