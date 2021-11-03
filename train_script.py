@@ -85,7 +85,7 @@ def built_AMPC_parser():
     parser.add_argument('--num_rollout_list_for_policy_update', type=list, default=[25])
     parser.add_argument('--gamma', type=float, default=1.)
     parser.add_argument('--gradient_clip_norm', type=float, default=10)
-    parser.add_argument('--init_punish_factor', type=float, default=30.)
+    parser.add_argument('--init_punish_factor', type=float, default=10.)
     parser.add_argument('--pf_enlarge_interval', type=int, default=20000)
     parser.add_argument('--pf_amplifier', type=float, default=1.)
 
@@ -111,8 +111,8 @@ def built_AMPC_parser():
     # policy and model
     parser.add_argument('--value_model_cls', type=str, default='MLP')
     parser.add_argument('--policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-4, 200000, 1e-5])
-    parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
+    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-4, 300000, 1e-5])
+    parser.add_argument('--value_lr_schedule', type=list, default=[8e-4, 300000, 1e-5])
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
@@ -125,7 +125,7 @@ def built_AMPC_parser():
     parser.add_argument('--attn_in_per_dim', type=int, default=None)
     parser.add_argument('--attn_in_total_dim', type=int, default=None)
     parser.add_argument('--attn_out_dim', type=int, default=64)
-    parser.add_argument('--attn_lr_schedule', type=list, default=[8e-4, 200000, 1e-5])
+    parser.add_argument('--attn_lr_schedule', type=list, default=[8e-4, 300000, 1e-5])
 
     # preprocessor
     parser.add_argument('--obs_preprocess_type', type=str, default='scale')
@@ -136,9 +136,9 @@ def built_AMPC_parser():
 
     # optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
-    parser.add_argument('--max_iter', type=int, default=200000)
+    parser.add_argument('--max_iter', type=int, default=300000)
     parser.add_argument('--num_workers', type=int, default=12)  # use a small value for debug
-    parser.add_argument('--num_learners', type=int, default=12)
+    parser.add_argument('--num_learners', type=int, default=20)
     parser.add_argument('--num_buffers', type=int, default=12)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
@@ -172,7 +172,7 @@ def built_parser(alg_name):
         args.attn_in_total_dim = env.per_other_info_dim * env.other_number
         args.obs_dim, args.act_dim = obs_space.shape[0], act_space.shape[0]
         args.state_dim = env.other_start_dim + args.attn_out_dim
-        args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180.] + \
+        args.obs_scale = [0.2, 1., 2., 0., 0., 0.] + \
                          [1., 1., 1 / 15., 0.2] + \
                          [1., 1.] + \
                          [1., 1., 1.] + \
