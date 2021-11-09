@@ -93,7 +93,8 @@ class OffPolicyWorker(object):
     def sample(self):
         batch_data = []
         for _ in range(self.batch_size):
-            processed_obs = self.preprocessor.process_obs(self.obs)
+            obs_transformed = self.preprocessor.convert_ego_coordinate(self.obs)
+            processed_obs = self.preprocessor.process_obs(obs_transformed)
             mask = self.info['mask']
             state = self._get_state(processed_obs, mask)
             judge_is_nan([processed_obs])

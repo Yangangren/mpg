@@ -85,12 +85,13 @@ class AMPCLearner(object):
         entropy_sum = self.tf.zeros((self.batch_size,))
 
         pf = self.punish_factor_schedule(ite)
-        processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
+        mb_obs_transformed = self.preprocessor.tf_convert_ego_coordinate(mb_obs)
+        processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs_transformed)
         mb_state = self.get_states(processed_mb_obs, mb_mask)
         obj_v_pred = self.policy_with_value.compute_obj_v(self.tf.stop_gradient(mb_state))
-
         for i in range(self.num_rollout_list_for_policy_update[0]):
-            processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
+            mb_obs_transformed = self.preprocessor.tf_convert_ego_coordinate(mb_obs)
+            processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs_transformed)
             mb_state = self.get_states(processed_mb_obs, mb_mask)
             actions, logps = self.policy_with_value.compute_action(mb_state)
 
