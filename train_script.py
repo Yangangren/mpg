@@ -116,7 +116,7 @@ def built_AMPC_parser():
     parser.add_argument('--num_hidden_layers', type=int, default=2)
     parser.add_argument('--num_hidden_units', type=int, default=256)
     parser.add_argument('--hidden_activation', type=str, default='gelu')
-    parser.add_argument('--deterministic_policy', default=False)
+    parser.add_argument('--deterministic_policy', default=True)
     parser.add_argument('--policy_out_activation', type=str, default='tanh')
     parser.add_argument('--action_range', type=float, default=1.)
 
@@ -138,7 +138,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=300000)
     parser.add_argument('--num_workers', type=int, default=12)  # use a small value for debug
-    parser.add_argument('--num_learners', type=int, default=20)
+    parser.add_argument('--num_learners', type=int, default=30)
     parser.add_argument('--num_buffers', type=int, default=12)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)

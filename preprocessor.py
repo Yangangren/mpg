@@ -35,12 +35,14 @@ def np_rotate_coordination(orig_x, orig_y, orig_d, coordi_rotate_d):
     transformed_x, transformed_y, transformed_d(range:(-180 deg, 180 deg])
     """
 
-    coordi_rotate_d_in_rad = coordi_rotate_d * math.pi / 180
-    transformed_x = orig_x * math.cos(coordi_rotate_d_in_rad) + orig_y * math.sin(coordi_rotate_d_in_rad)
-    transformed_y = -orig_x * math.sin(coordi_rotate_d_in_rad) + orig_y * math.cos(coordi_rotate_d_in_rad)
+    coordi_rotate_d_in_rad = coordi_rotate_d * np.pi / 180
+    transformed_x = orig_x * np.cos(coordi_rotate_d_in_rad) + orig_y * np.sin(coordi_rotate_d_in_rad)
+    transformed_y = -orig_x * np.sin(coordi_rotate_d_in_rad) + orig_y * np.cos(coordi_rotate_d_in_rad)
     transformed_d = orig_d - coordi_rotate_d
-    transformed_d = np.where(transformed_d>180, transformed_d - 360, transformed_d)
-    transformed_d = np.where(transformed_d<=-180, transformed_d + 360, transformed_d)
+    while np.any(transformed_d>180):
+        transformed_d = np.where(transformed_d>180, transformed_d - 360, transformed_d)
+    while np.any(transformed_d <= -180):
+        transformed_d = np.where(transformed_d <= -180, transformed_d + 360, transformed_d)
     return transformed_x, transformed_y, transformed_d
 
 
@@ -54,12 +56,14 @@ def tf_rotate_coordination(orig_x, orig_y, orig_d, coordi_rotate_d):
     transformed_x, transformed_y, transformed_d(range:(-180 deg, 180 deg])
     """
 
-    coordi_rotate_d_in_rad = coordi_rotate_d * math.pi / 180
-    transformed_x = orig_x * math.cos(coordi_rotate_d_in_rad) + orig_y * math.sin(coordi_rotate_d_in_rad)
-    transformed_y = -orig_x * math.sin(coordi_rotate_d_in_rad) + orig_y * math.cos(coordi_rotate_d_in_rad)
+    coordi_rotate_d_in_rad = coordi_rotate_d * np.pi / 180
+    transformed_x = orig_x * tf.cos(coordi_rotate_d_in_rad) + orig_y * tf.sin(coordi_rotate_d_in_rad)
+    transformed_y = -orig_x * tf.sin(coordi_rotate_d_in_rad) + orig_y * tf.cos(coordi_rotate_d_in_rad)
     transformed_d = orig_d - coordi_rotate_d
-    transformed_d = tf.where(transformed_d>180, transformed_d - 360, transformed_d)
-    transformed_d = tf.where(transformed_d<=-180, transformed_d + 360, transformed_d)
+    while tf.reduce_any(transformed_d > 180):
+        transformed_d = tf.where(transformed_d > 180, transformed_d - 360, transformed_d)
+    while tf.reduce_any(transformed_d <= -180):
+        transformed_d = tf.where(transformed_d <= -180, transformed_d + 360, transformed_d)
     return transformed_x, transformed_y, transformed_d
 
 
@@ -147,28 +151,30 @@ class Preprocessor(object):
             self.ret = 0
 
     def convert_ego_coordinate(self, obs):
-        obses_ego = obs[:, :self.args.state_other_start_dim]
-        obses_ego_all = np.reshape(np.tile(obses_ego, (1, self.args.max_veh_num)), (-1, self.args.state_other_start_dim))
-        obs_other = np.reshape(obs[:, self.args.state_other_start_dim:], (-1, self.args.state_per_other_dim))
+        obs_ego = obs[:, :self.args.other_start_dim]
+        obses_ego_all = np.reshape(np.tile(obs_ego, (1, self.args.other_number)), (-1, self.args.other_start_dim))
+        obs_other = np.reshape(obs[:, self.args.other_start_dim:], (-1, self.args.per_other_dim))
 
         transformed_x, transformed_y, transformed_d = np_shift_and_rotate_coordination(obs_other[:, 0], obs_other[:, 1], obs_other[:, 3],
                                                                                     obses_ego_all[:, 3], obses_ego_all[:, 4], obses_ego_all[:, 5])
-        obs_other_transformed = np.stack([transformed_x, transformed_y, obs_other[:, 2], transformed_d, obs_other[:, 4:]], axis=-1)
-        obs_other_reshaped = np.reshape(obs_other_transformed, (-1, self.args.state_per_other_dim * self.args.max_veh_num))
-        obs_transformed = np.concatenate([obses_ego, obs_other_reshaped], axis=1)
-        return obs_transformed
+        obs_other_transformed = np.stack([transformed_x, transformed_y, obs_other[:, 2], transformed_d], axis=-1)
+        obs_other_transformed = np.concatenate([obs_other_transformed, obs_other[:, 4:]], axis=1)
+        obs_other_reshaped = np.reshape(obs_other_transformed, (-1, self.args.per_other_dim * self.args.other_number))
+        obs_transformed = np.concatenate([obs_ego, obs_other_reshaped], axis=1)
+        return np.squeeze(obs_transformed)
 
     def tf_convert_ego_coordinate(self, obs):
-        obses_ego = obs[:, :self.args.state_other_start_dim]
-        obses_ego_all = tf.reshape(tf.tile(obses_ego, (1, self.args.max_veh_num)), (-1, self.args.state_other_start_dim))
-        obs_other = tf.reshape(obs[:, self.args.state_other_start_dim:], (-1, self.args.state_per_other_dim))
+        obs_ego = obs[:, :self.args.other_start_dim]
+        obses_ego_all = tf.reshape(tf.tile(obs_ego, (1, self.args.other_number)), (-1, self.args.other_start_dim))
+        obs_other = tf.reshape(obs[:, self.args.other_start_dim:], (-1, self.args.per_other_dim))
 
         transformed_x, transformed_y, transformed_d = tf_shift_and_rotate_coordination(obs_other[:, 0], obs_other[:, 1], obs_other[:, 3],
                                                                                     obses_ego_all[:, 3], obses_ego_all[:, 4], obses_ego_all[:, 5])
 
-        obs_other_transformed = tf.stack([transformed_x, transformed_y, obs_other[:, 2], transformed_d, obs_other[:, 4:]], axis=-1)
-        obs_other_reshaped = tf.reshape(obs_other_transformed, (-1, self.args.state_per_other_dim * self.args.max_veh_num))
-        obs_transformed = tf.concat([obses_ego, obs_other_reshaped], axis=1)
+        obs_other_transformed = tf.stack([transformed_x, transformed_y, obs_other[:, 2], transformed_d], axis=-1)
+        obs_other_transformed = tf.concat([obs_other_transformed, obs_other[:, 4:]], axis=1)
+        obs_other_reshaped = tf.reshape(obs_other_transformed, (-1, self.args.per_other_dim * self.args.other_number))
+        obs_transformed = tf.concat([obs_ego, obs_other_reshaped], axis=1)
         return obs_transformed
 
     def process_rew(self, rew, done):

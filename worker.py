@@ -39,7 +39,7 @@ class OffPolicyWorker(object):
         self.done = False
         self.preprocessor = Preprocessor((self.args.obs_dim, ), self.args.obs_preprocess_type, self.args.reward_preprocess_type,
                                           self.args.reward_scale, self.args.reward_shift, args=self.args, gamma=self.args.gamma)
-
+        # obses_rela = self.preprocessor.tf_convert_ego_coordinate(np.tile(self.obs[np.newaxis, :], (5, 1)))
         self.explore_sigma = self.args.explore_sigma
         self.iteration = 0
         self.num_sample = 0
@@ -93,7 +93,7 @@ class OffPolicyWorker(object):
     def sample(self):
         batch_data = []
         for _ in range(self.batch_size):
-            obs_transformed = self.preprocessor.convert_ego_coordinate(self.obs)
+            obs_transformed = self.preprocessor.convert_ego_coordinate(self.obs[np.newaxis, :])
             processed_obs = self.preprocessor.process_obs(obs_transformed)
             mask = self.info['mask']
             state = self._get_state(processed_obs, mask)

@@ -74,7 +74,7 @@ class Evaluator(object):
         if render: self.env.render(weights=np.zeros((16,)))
         if steps is not None:
             for _ in range(steps):
-                obs_transformed = self.preprocessor.convert_ego_coordinate(obs)
+                obs_transformed = self.preprocessor.convert_ego_coordinate(obs[np.newaxis, :])
                 processed_obs = self.preprocessor.process_obs(obs_transformed)
                 mask = info['mask']
                 state, attn_weights = self._get_state(processed_obs, mask)
@@ -85,7 +85,7 @@ class Evaluator(object):
                 reward_list.append(reward)
         else:
             while not done:
-                obs_transformed = self.preprocessor.convert_ego_coordinate(obs)
+                obs_transformed = self.preprocessor.convert_ego_coordinate(obs[np.newaxis, :])
                 processed_obs = self.preprocessor.process_obs(obs_transformed)
                 mask = info['mask']
                 state, attn_weights = self._get_state(processed_obs, mask)
