@@ -10,7 +10,7 @@
 import logging
 
 import numpy as np
-from gym.envs.user_defined.toyota_env_PI_integrate.dynamics_and_models import EnvironmentModel
+from gym.envs.user_defined.toyota_env_attn_rela_obs.dynamics_and_models import EnvironmentModel
 
 from preprocessor import Preprocessor
 from utils.misc import TimerStat
