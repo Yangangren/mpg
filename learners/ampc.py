@@ -54,7 +54,7 @@ class AMPCLearner(object):
 
     def get_batch_data(self, batch_data):
         self.batch_data = {'batch_obs': batch_data[0].astype(np.float32),
-                           'batch_future_n_point': batch_data[2].astype(np.float32),
+                           'batch_index': batch_data[2].astype(np.float32),
                            'batch_mask': batch_data[3].astype(np.float32)
                            }
 
@@ -74,8 +74,8 @@ class AMPCLearner(object):
         pf = init_pf * self.tf.pow(amplifier, self.tf.cast(ite//interval, self.tf.float32))
         return pf
 
-    def model_rollout_for_update(self, mb_obs, ite, mb_future_n_point, mb_mask):
-        self.model.reset(mb_obs)
+    def model_rollout_for_update(self, mb_obs, ite, mb_index, mb_mask):
+        self.model.reset(mb_obs, mb_index)
         rewards_sum = self.tf.zeros((self.batch_size,))
         punish_terms_for_training_sum = self.tf.zeros((self.batch_size,))
         real_punish_terms_sum = self.tf.zeros((self.batch_size,))
@@ -96,7 +96,7 @@ class AMPCLearner(object):
             actions, logps = self.policy_with_value.compute_action(mb_state)
 
             mb_obs, rewards, punish_terms_for_training, real_punish_term, veh2veh4real, veh2road4real, veh2line4real = \
-                self.model.rollout_out(actions, mb_future_n_point[:, :, i])
+                self.model.rollout_out(actions)
 
             rewards_sum += self.preprocessor.tf_process_rewards(rewards)
             punish_terms_for_training_sum += self.args.reward_scale * punish_terms_for_training
@@ -126,11 +126,11 @@ class AMPCLearner(object):
                real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy
 
     @tf.function
-    def forward_and_backward(self, mb_obs, ite, mb_future_n_point, mb_mask):
+    def forward_and_backward(self, mb_obs, ite, mb_index, mb_mask):
         with self.tf.GradientTape(persistent=True) as tape:
             obj_v_loss, obj_loss, punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy\
-                = self.model_rollout_for_update(mb_obs, ite, mb_future_n_point, mb_mask)
+                = self.model_rollout_for_update(mb_obs, ite, mb_index, mb_mask)
         with self.tf.name_scope('policy_gradient') as scope:
             pg_grad = tape.gradient(pg_loss, self.policy_with_value.policy.trainable_weights)
             attn_net_grad = tape.gradient(pg_loss, self.policy_with_value.attn_net.trainable_weights)
@@ -146,7 +146,7 @@ class AMPCLearner(object):
     def compute_gradient(self, samples, iteration):
         self.get_batch_data(samples)
         mb_obs = self.tf.constant(self.batch_data['batch_obs'])
-        mb_future_n_point = self.tf.constant(self.batch_data['batch_future_n_point'])
+        mb_index = self.tf.constant(self.batch_data['batch_index'], dtype=self.tf.int32)
         iteration = self.tf.convert_to_tensor(iteration, self.tf.int32)
         mb_mask = self.tf.constant(self.batch_data['batch_mask'])
 
@@ -154,7 +154,7 @@ class AMPCLearner(object):
             pg_grad, obj_v_grad, attn_net_grad, obj_v_loss, obj_loss, \
             punish_term_for_training, punish_loss, pg_loss, \
             real_punish_term, veh2veh4real, veh2road4real, veh2line4real, pf, policy_entropy =\
-                self.forward_and_backward(mb_obs, iteration, mb_future_n_point, mb_mask)
+                self.forward_and_backward(mb_obs, iteration, mb_index, mb_mask)
 
             pg_grad, pg_grad_norm = self.tf.clip_by_global_norm(pg_grad, self.args.gradient_clip_norm)
             obj_v_grad, obj_v_grad_norm = self.tf.clip_by_global_norm(obj_v_grad, self.args.gradient_clip_norm)

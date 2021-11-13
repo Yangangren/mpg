@@ -71,7 +71,7 @@ class Evaluator(object):
         reward_info_dict_list = []
         done = 0
         obs, info = self.env.reset()
-        if render: self.env.render(weights=np.zeros((16,)))
+        if render: self.env.render(weights=np.zeros((self.args.other_number,)))
         if steps is not None:
             for _ in range(steps):
                 obs_transformed = self.preprocessor.convert_ego_coordinate(obs[np.newaxis, :])

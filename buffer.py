@@ -46,8 +46,8 @@ class ReplayBuffer(object):
     def __len__(self):
         return len(self._storage)
 
-    def add(self, obs, done, future_point, mask, weight):
-        data = (obs, done, future_point, mask)
+    def add(self, obs, done, path_index, mask, weight):
+        data = (obs, done, path_index, mask)
         if self._next_idx >= len(self._storage):
             self._storage.append(data)
         else:
@@ -55,15 +55,15 @@ class ReplayBuffer(object):
         self._next_idx = (self._next_idx + 1) % self._maxsize
 
     def _encode_sample(self, idxes):
-        obses, dones, future_points, masks = [], [], [], []
+        obses, dones, path_indexes, masks = [], [], [], []
         for i in idxes:
             data = self._storage[i]
-            obs, done, future_point, mask = data
+            obs, done, path_index, mask = data
             obses.append(np.array(obs, copy=False))
             dones.append(done)
-            future_points.append(np.array(future_point, copy=False))
+            path_indexes.append(path_index)
             masks.append(np.array(mask, copy=False))
-        return np.array(obses), np.array(dones),  np.array(future_points), np.array(masks)
+        return np.array(obses), np.array(dones),  np.array(path_indexes), np.array(masks)
 
     def sample_idxes(self, batch_size):
         return np.array([random.randint(0, len(self._storage) - 1) for _ in range(batch_size)], dtype=np.int32)

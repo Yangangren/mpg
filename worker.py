@@ -111,7 +111,7 @@ class OffPolicyWorker(object):
                 judge_is_nan([action])
                 raise ValueError
             obs_tp1, reward, self.done, info = self.env.step(action.numpy()[0])
-            batch_data.append((obs_tp1, self.done, info['future_n_point'], info['mask']))
+            batch_data.append((obs_tp1, self.done, info['path_index'], info['mask']))
             if self.done:
                 self.obs, self.info = self.env.reset()
             else:

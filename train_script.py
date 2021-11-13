@@ -46,7 +46,7 @@ def built_AMPC_parser():
     mode = parser.parse_args().mode
 
     if mode == 'testing':
-        test_dir = './results/CrossroadEnd2endPiIntegrate-v0/experiment-2021-08-20-16-36-13'
+        test_dir = './results/CrossroadEnd2endAllRela-v0/experiment-2021-11-11-23-53-20'
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
@@ -76,6 +76,10 @@ def built_AMPC_parser():
     parser.add_argument('--act_dim', default=None)
     parser.add_argument('--state_dim', default=None)
 
+    parser.add_argument('--ego_info_dim', type=int, default=None)
+    parser.add_argument('--track_info_dim', type=int, default=None)
+    parser.add_argument('--per_path_info_dim', type=int, default=None)
+    parser.add_argument('--future_point_num', type=int, default=None)
     parser.add_argument('--other_start_dim', type=int, default=None)
     parser.add_argument('--per_other_dim', type=int, default=None)
     parser.add_argument('--other_number', type=int, default=None)
@@ -138,7 +142,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=300000)
     parser.add_argument('--num_workers', type=int, default=12)  # use a small value for debug
-    parser.add_argument('--num_learners', type=int, default=30)
+    parser.add_argument('--num_learners', type=int, default=35 )
     parser.add_argument('--num_buffers', type=int, default=12)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
@@ -165,6 +169,10 @@ def built_parser(alg_name):
         args.env_kwargs_future_point_num = args.num_rollout_list_for_policy_update[0]
         env = gym.make(args.env_id, **args2envkwargs(args))
         obs_space, act_space = env.observation_space, env.action_space
+        args.ego_info_dim = env.ego_info_dim
+        args.track_info_dim = env.track_info_dim
+        args.future_point_num = env.future_point_num
+        args.per_path_info_dim = env.per_path_info_dim
         args.per_other_dim = env.per_other_info_dim
         args.other_start_dim = env.other_start_dim
         args.other_number = env.other_number
@@ -174,9 +182,10 @@ def built_parser(alg_name):
         args.state_dim = env.other_start_dim + args.attn_out_dim
         args.obs_scale = [0.2, 1., 2., 0., 0., 0.] + \
                          [1., 1., 1 / 15., 0.2] + \
-                         [1., 1.] + \
-                         [1., 1., 1.] + \
-                         [1., 1., 1.] + \
+                         [1 / 30., 1 / 30., 1 / 180., 0.2] * args.env_kwargs_future_point_num + \
+                         [0., 0.] + \
+                         [0., 0., 0.] + \
+                         [0., 0., 0.] + \
                          [1 / 30., 1 / 30., 0.2, 1 / 180., 0.2, 0.5, 0.] * args.other_number
         return args
 
