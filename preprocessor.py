@@ -203,7 +203,7 @@ class Preprocessor(object):
         obs_ego_all = tf.reshape(tf.tile(obs_ego, (1, self.args.other_number)), (-1, self.args.ego_info_dim))
         obs_other = tf.reshape(obs[:, self.args.other_start_dim:], (-1, self.args.per_other_dim))
 
-        transformed_x, transformed_y, transformed_d = np_shift_and_rotate_coordination(obs_other[:, 0], obs_other[:, 1], obs_other[:, 3],
+        transformed_x, transformed_y, transformed_d = tf_shift_and_rotate_coordination(obs_other[:, 0], obs_other[:, 1], obs_other[:, 3],
                                                                                        obs_ego_all[:, 3], obs_ego_all[:, 4], obs_ego_all[:, 5])
 
         obs_other_transformed = tf.stack([transformed_x, transformed_y, obs_other[:, 2], transformed_d], axis=-1)
