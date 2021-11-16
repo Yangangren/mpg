@@ -42,21 +42,25 @@ NAME2EVALUATORS = dict([('Evaluator', Evaluator), ('None', None)])
 def built_AMPC_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--noise_mode', type=str, default='no_noise')  # adv_noise rand_noise no_noise
-    parser.add_argument('--noise_bound', type=list, default=[[0., 0., 2., 0.0]])
+    # only add noise into velocity and heading
+    # speed bound: [-0.3, 0.15]; heading bound: [0.0, 0.0]
+    parser.add_argument('--noise_bound', type=list, default=[[0.225, -0.075], [0.0, 0.0]])
     parser.add_argument('--mode', type=str, default='training')  # training testing
+    parser.add_argument('--adv_env_id', default='CrossroadEnd2endAdv-v0')
     mode = parser.parse_args().mode
+    noise_mode = parser.parse_args().noise_mode
 
     if mode == 'testing':
-        test_dir = './results/CrossroadEnd2endAdv-v0/experiment-2021-10-28-23-24-55'
+        test_dir = './results/CrossroadEnd2endAdv-v0/{}/experiment-2021-11-01-09-36-32'.format(noise_mode)
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
+        test_log_dir = test_dir + '/tester/test-{}'.format(time_now)
         params.update(dict(test_dir=test_dir,
-                           test_iter_list=[190000],
+                           test_iter_list=[195000],
                            test_log_dir=test_log_dir,
                            num_eval_episode=4,
                            eval_log_interval=1,
-                           fixed_steps=None,
+                           fixed_steps=120,
                            eval_render=True))
         for key, val in params.items():
             parser.add_argument("-" + key, default=val)
@@ -98,7 +102,7 @@ def built_AMPC_parser():
     # buffer
     parser.add_argument('--max_buffer_size', type=int, default=50000)
     parser.add_argument('--replay_starts', type=int, default=3000)
-    parser.add_argument('--replay_batch_size', type=int, default=256)
+    parser.add_argument('--replay_batch_size', type=int, default=512)
     parser.add_argument('--replay_alpha', type=float, default=0.6)
     parser.add_argument('--replay_beta', type=float, default=0.4)
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
@@ -106,7 +110,7 @@ def built_AMPC_parser():
     # tester and evaluator
     parser.add_argument('--num_eval_episode', type=int, default=4)
     parser.add_argument('--eval_log_interval', type=int, default=1)
-    parser.add_argument('--fixed_steps', type=int, default=60) # todo
+    parser.add_argument('--fixed_steps', type=int, default=120) # todo
     parser.add_argument('--eval_render', type=bool, default=False)
 
     # policy and model
@@ -123,7 +127,7 @@ def built_AMPC_parser():
 
     # adversarial policy
     parser.add_argument('--adv_policy_model_cls', type=str, default='MLP')
-    parser.add_argument('--adv_policy_lr_schedule', type=list, default=[3e-5, 200000, 1e-6])
+    parser.add_argument('--adv_policy_lr_schedule', type=list, default=[3e-4, 200000, 1e-5])
     parser.add_argument('--adv_deterministic_policy', default=False, action='store_true')
     parser.add_argument('--adv_policy_out_activation', type=str, default='tanh')
     parser.add_argument('--adv_action_range', type=float, default=1.)
@@ -140,7 +144,7 @@ def built_AMPC_parser():
     parser.add_argument('--max_sampled_steps', type=int, default=0)
     parser.add_argument('--max_iter', type=int, default=200000)
     parser.add_argument('--num_workers', type=int, default=4)
-    parser.add_argument('--num_learners', type=int, default=25)
+    parser.add_argument('--num_learners', type=int, default=22)
     parser.add_argument('--num_buffers', type=int, default=4)
     parser.add_argument('--max_weight_sync_delay', type=int, default=300)
     parser.add_argument('--grads_queue_size', type=int, default=20)
@@ -152,7 +156,7 @@ def built_AMPC_parser():
     # IO
     args = parser.parse_args()
     time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    results_dir = './results/{env}/experiment-{time}'.format(env=args.env_id, time=time_now)
+    results_dir = './results/{env}/{noise_mode}/experiment-{time}'.format(env=args.env_id, noise_mode=args.noise_mode,time=time_now)
     parser.add_argument('--result_dir', type=str, default=results_dir)
     parser.add_argument('--log_dir', type=str, default=results_dir + '/logs')
     parser.add_argument('--model_dir', type=str, default=results_dir + '/models')

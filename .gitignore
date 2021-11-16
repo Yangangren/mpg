@@ -205,3 +205,12 @@ dmypy.json
 .idea/
 results/
 test_for_debug.py
+/data.npy
+/loss_actor.pdf
+/loss_critic.pdf
+/loss_penalty.pdf
+/ego2veh_penalty.pdf
+/eva_track_return.pdf
+/eva_total_return.pdf
+/test_total_return.pdf
+/test_track_return.pdf

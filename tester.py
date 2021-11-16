@@ -16,7 +16,7 @@ logger.setLevel(logging.INFO)
 class Tester(object):
     def __init__(self, policy_cls, evaluator_cls, args):
         self.args = args
-        self.evaluator = evaluator_cls(policy_cls, self.args.env_id, self.args)
+        self.evaluator = evaluator_cls(policy_cls, self.args.adv_env_id, self.args)
 
     def evaluate_saved_model(self, model_load_dir, ppc_params_load_dir, iteration):
         self.evaluator.evaluate_saved_model(model_load_dir, ppc_params_load_dir, iteration)
@@ -29,4 +29,6 @@ class Tester(object):
             ppc_params_load_dir = self.args.test_dir + '/models'
             self.evaluate_saved_model(model_load_dir, ppc_params_load_dir, ite)
             self.evaluator.run_evaluation(ite)
+        if self.args.mode == 'testing':
+            self.evaluator.env.close()
 

@@ -26,10 +26,11 @@ class Evaluator(object):
     tf.config.threading.set_inter_op_parallelism_threads(1)
     tf.config.threading.set_intra_op_parallelism_threads(1)
 
-    def __init__(self, policy_cls, env_id, args):
+    def __init__(self, policy_cls, adv_env_id, args):
         logging.getLogger("tensorflow").setLevel(logging.ERROR)
         self.args = args
-        self.env = gym.make(env_id, **args2envkwargs(args))
+        self.env = gym.make(adv_env_id, **args2envkwargs(args))
+        print('current testing env:', adv_env_id)
         self.policy_with_value = policy_cls(self.args)
         self.iteration = 0
         if self.args.mode == 'training':
