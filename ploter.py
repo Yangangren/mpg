@@ -50,7 +50,7 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     env_list = ['CrossroadEnd2endAdv-v0']
     task_list = ['adv_noise', 'no_noise']
     palette = "bright"
-    lbs = ['adv_noise', 'no_noise']
+    lbs = ['APG', 'DPG']
     dir_str = './results/{}/{}'
     df_list = []
     for alg in env_list:
@@ -81,60 +81,64 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
                 data_in_one_run_of_one_alg = {key: val[2:] for key, val in data_in_one_run_of_one_alg.items()}
                 data_in_one_run_of_one_alg.update(dict(algorithm=alg, task=task, num_run=num_run))
                 df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
+                df_in_one_run_of_one_alg['learner_stats/scalar/punish_term_for_training'] = 10 * df_in_one_run_of_one_alg['learner_stats/scalar/punish_term_for_training']
                 for tag in tag2plot:
                     df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
                 df_list.append(df_in_one_run_of_one_alg)
     total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
     figsize = (10, 8)
-    axes_size = [0.12, 0.12, 0.87, 0.87]
-    fontsize = 25
+    fontsize = 16
 
     f1 = plt.figure(1, figsize=figsize)
-    ax1 = f1.add_axes([0.13, 0.12, 0.86, 0.87])
+    ax1 = f1.add_axes([0.10, 0.12, 0.86, 0.87])
     sns.lineplot(x="iteration", y="learner_stats/scalar/obj_loss_smo", hue="task",
                  data=total_dataframe, linewidth=2, palette=palette,)
-    # plt.ylim(0, 100)
+    plt.xlim(0, 20)
+    plt.ylim(0, 100)
     handles, labels = ax1.get_legend_handles_labels()
     labels = lbs
     ax1.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
     ax1.set_ylabel('$J_{\\rm actor}$', fontsize=fontsize)
     ax1.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
+    plt.yticks(fontsize=fontsize - 4)
+    plt.xticks(fontsize=fontsize - 4)
     plt.savefig('./loss_actor.pdf')
 
     f2 = plt.figure(2, figsize=figsize)
-    ax2 = f2.add_axes([0.15, 0.12, 0.85, 0.86])
+    ax2 = f2.add_axes([0.10, 0.12, 0.85, 0.86])
     sns.lineplot(x="iteration", y="learner_stats/scalar/obj_v_loss_smo", hue="task",
                  data=total_dataframe, linewidth=2, palette=palette, legend=False)
-    plt.ylim(0, 1000)
-    ax2.set_ylabel('$J_{\\rm critic}$', fontsize=fontsize)
+    plt.xlim(0, 20)
+    plt.ylim(0, 400)
+    ax2.set_ylabel('$J_{v}$', fontsize=fontsize)
     ax2.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
+    plt.yticks(fontsize=fontsize - 4)
+    plt.xticks(fontsize=fontsize - 4)
     plt.savefig('./loss_critic.pdf')
 
     f3 = plt.figure(3, figsize=figsize)
-    ax3 = f3.add_axes([0.12, 0.12, 0.87, 0.87])
+    ax3 = f3.add_axes([0.10, 0.12, 0.87, 0.87])
     sns.lineplot(x="iteration", y="learner_stats/scalar/real_punish_term_smo", hue="task",
                  data=total_dataframe, linewidth=2, palette=palette, legend=False)
-    ax3.set_ylabel('$J_{\\rm penalty}$', fontsize=fontsize)
+    plt.xlim(0, 20)
+    ax3.set_ylabel('$J_{\\rm safe}$', fontsize=fontsize)
     ax3.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
+    plt.yticks(fontsize=fontsize - 4)
+    plt.xticks(fontsize=fontsize - 4)
     plt.savefig('./loss_penalty.pdf')
 
-    f4 = plt.figure(4, figsize=figsize)
-    ax4 = f4.add_axes([0.11, 0.12, 0.86, 0.87])
-    sns.lineplot(x="iteration", y="learner_stats/scalar/veh2veh4real", hue="task",
+    f4 = plt.figure(3, figsize=figsize)
+    ax4 = f3.add_axes([0.10, 0.12, 0.87, 0.87])
+    sns.lineplot(x="iteration", y="learner_stats/scalar/obj_loss_smo", hue="task",
                  data=total_dataframe, linewidth=2, palette=palette, legend=False)
-    ax4.set_ylabel('Ego-to-veh Penalty', fontsize=fontsize)
+    plt.xlim(0, 20)
+    plt.ylim(0, 45)
+    ax4.set_ylabel('$J_{\\rm track}$', fontsize=fontsize)
     ax4.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    plt.ylim(0, 3)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
-    plt.savefig('./ego2veh_penalty.pdf')
-    plt.show()
+    plt.yticks(fontsize=fontsize - 4)
+    plt.xticks(fontsize=fontsize - 4)
+    plt.savefig('./loss_penalty.pdf')
+    # plt.show()
 
 
 def plot_eva_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
@@ -323,7 +327,7 @@ def main(dirs_dict_for_plot=None):
 
 
 if __name__ == "__main__":
-    # plot_opt_results_of_all_alg_n_runs()
-    plot_eva_results_of_all_alg_n_runs()
+    plot_opt_results_of_all_alg_n_runs()
+    # plot_eva_results_of_all_alg_n_runs()
     # main()
     # plot_trained_results_of_all_alg_n_runs()
