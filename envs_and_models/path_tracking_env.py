@@ -75,7 +75,7 @@ class VehicleDynamics(object):
         self.expected_vs = 20.
         self.path = ReferencePath()
 
-    def f_xu(self, states, actions, tau):  # states and actions are tensors, [[], [], ...]
+    def f_xu(self, states, actions, adv_actions, tau):  # states and actions are tensors, [[], [], ...]
         # veh_state = obs: v_xs, v_ys, rs, delta_ys, xs
         # obs: v_xs, v_ys, rs, delta_ys, delta_phis, xs, future_delta_ys1,..., future_delta_ysn,
         #      future_delta_phis1,..., future_delta_phisn
@@ -99,7 +99,7 @@ class VehicleDynamics(object):
         miu_r = tf.sqrt(tf.square(miu * F_zr) - tf.square(F_xr)) / F_zr
         alpha_f = tf.atan((v_y + a * r) / v_x) - steer
         alpha_r = tf.atan((v_y - b * r) / v_x)
-        if self.if_model:
+        if adv_actions is not None:
             # next_state = [v_x + tau * (a_x + v_y * r),
             #               (mass * v_y * v_x + tau * (
             #                       a * C_f - b * C_r) * r - tau * C_f * steer * v_x - tau * mass * tf.square(
@@ -110,13 +110,14 @@ class VehicleDynamics(object):
             #               delta_phi + tau * r,
             #               x + tau * (v_x * tf.cos(delta_phi) - v_y * tf.sin(delta_phi)),
             #               ]
+            F_w = adv_actions[:, 0]
             next_state = [v_x + tau * (a_x + v_y * r),
                           (mass * v_y * v_x + tau * (
                                   a * C_f - b * C_r) * r - tau * C_f * steer * v_x - tau * mass * tf.square(
-                              v_x) * r) / (mass * v_x - tau * (C_f + C_r)),
+                              v_x) * r + tau * v_x * F_w) / (mass * v_x - tau * (C_f + C_r)),
                           (-I_z * r * v_x - tau * (a * C_f - b * C_r) * v_y + tau * a * C_f * steer * v_x) / (
                                   tau * (tf.square(a) * C_f + tf.square(b) * C_r) - I_z * v_x),
-                          delta_y + tau * (v_x * tf.sin(delta_phi) + v_y * tf.cos(delta_phi)) + tfd.Normal(0.5*tf.ones_like(v_x), 0.01).sample(),
+                          delta_y + tau * (v_x * tf.sin(delta_phi) + v_y * tf.cos(delta_phi)),
                           delta_phi + tau * r,
                           x + tau * (v_x * tf.cos(delta_phi) - v_y * tf.sin(delta_phi)),
                           ]
@@ -137,8 +138,8 @@ class VehicleDynamics(object):
         return tf.stack(next_state, 1),\
                tf.stack([alpha_f, alpha_r, next_state[2], alpha_f_bounds, alpha_r_bounds, r_bounds], 1)
 
-    def prediction(self, x_1, u_1, frequency):
-        x_next, next_params = self.f_xu(x_1, u_1, 1 / frequency)
+    def prediction(self, x_1, u_1, u_2, frequency):
+        x_next, next_params = self.f_xu(x_1, u_1, u_2, 1 / frequency)
         return x_next, next_params
 
     def simulation(self, states, full_states, actions, base_freq, simu_times):
@@ -147,7 +148,7 @@ class VehicleDynamics(object):
         # others: alpha_f, alpha_r, r, alpha_f_bounds, alpha_r_bounds, r_bounds
         for i in range(simu_times):
             states = tf.convert_to_tensor(states.copy(), dtype=tf.float32)
-            states, others = self.prediction(states, actions, base_freq)
+            states, others = self.prediction(states, actions, None, base_freq)
             states = states.numpy()
             others = others.numpy()
             states[:, 0] = np.clip(states[:, 0], 1, 35)
@@ -244,7 +245,7 @@ class ReferencePath(object):
 
 class PathTrackingModel(object):  # all tensors
     def __init__(self, num_future_data=0, **kwargs):
-        self.vehicle_dynamics = VehicleDynamics(if_model=True)
+        self.vehicle_dynamics = VehicleDynamics()
         self.base_frequency = 10.
         self.obses = None
         self.actions = None
@@ -252,6 +253,9 @@ class PathTrackingModel(object):  # all tensors
         self.num_future_data = num_future_data
         self.history_positions = deque(maxlen=100)
         self.expected_vs = 20.
+        self.adv_act_bound = dict(high=[1200.0], low=[-1200.0])  # F_w
+        self.adv_act_scale = (np.array(self.adv_act_bound['high'], dtype=np.float32) - np.array(self.adv_act_bound['low'], dtype=np.float32)) / 2.
+        self.adv_act_bias = (np.array(self.adv_act_bound['high'], dtype=np.float32) + np.array(self.adv_act_bound['low'], dtype=np.float32)) / 2.
         # veh_state: v_xs, v_ys, rs, delta_ys, delta_phis, xs
         # obs: delta_v_xs, v_ys, rs, delta_ys, delta_phis, xs, future_delta_ys1,..., future_delta_ysn,
         #      future_delta_phis1,..., future_delta_phisn
@@ -276,13 +280,14 @@ class PathTrackingModel(object):  # all tensors
         lists_to_stack = [delta_v_xs + self.expected_vs, v_ys, rs, delta_ys, delta_phis, xs]
         return tf.stack(lists_to_stack, axis=1)
 
-    def rollout_out(self, actions):  # obses and actions are tensors, think of actions are in range [-1, 1]
+    def rollout_out(self, actions, adv_actions):  # obses and actions are tensors, think of actions are in range [-1, 1]
         with tf.name_scope('model_step') as scope:
             steer_norm, a_xs_norm = actions[:, 0], actions[:, 1]
             actions = tf.stack([steer_norm * 1.2 * np.pi / 9, a_xs_norm * 3.], 1)
+            adv_actions = self.adv_act_scale * adv_actions + self.adv_act_bias
             self.actions = actions
             rewards = self.vehicle_dynamics.compute_rewards(self.veh_states, actions)
-            self.veh_states, _ = self.vehicle_dynamics.prediction(self.veh_states, actions,
+            self.veh_states, _ = self.vehicle_dynamics.prediction(self.veh_states, actions, adv_actions,
                                                                   self.base_frequency)
             v_xs, v_ys, rs, delta_ys, delta_phis, xs = self.veh_states[:, 0], self.veh_states[:, 1], self.veh_states[:, 2], \
                                                        self.veh_states[:, 3], self.veh_states[:, 4], self.veh_states[:, 5]
@@ -378,6 +383,7 @@ class PathTrackingEnv(gym.Env, ABC):
         self.action_space = gym.spaces.Box(low=np.array([-1.2*np.pi / 9, -3]),
                                            high=np.array([1.2*np.pi / 9, 3]),
                                            dtype=np.float32)
+        self.adv_action_space = gym.spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32)
 
         self.history_positions = deque(maxlen=100)
         plt.ion()
