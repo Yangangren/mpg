@@ -55,11 +55,21 @@ NUM_LEARNER = 12
 NUM_BUFFER = 2
 
 
+def set_seed(seed):
+    import random
+    import tensorflow as tf
+    import numpy as np
+    random.seed(seed)
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+    print('Using seed %s' % (str(seed)))
+
 def built_NADP_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--noise_mode', type=str, default='adv_noise')  # adv_noise rand_noise no_noise
+    parser.add_argument('--noise_mode', type=str, default='adv_noise')  # adv_noise rand_noise no_noise adv_noise_smooth
     parser.add_argument('--mode', type=str, default='training') # training testing
     mode, noise_mode = parser.parse_args().mode, parser.parse_args().noise_mode
+    parser.add_argument('--seed', type=int, default=0)
 
     if mode == 'testing':
         test_dir = '../results/NADP/{}/experiment-2020-09-23-20-52-24'.format(noise_mode)
@@ -201,6 +211,7 @@ def built_parser(alg_name):
 
 def main(alg_name):
     args = built_parser(alg_name)
+    set_seed(args.seed)                          # todo:cannot work in all files
     logger.info('begin training agents with parameter {}'.format(str(args)))
     if args.mode == 'training':
         ray.init(object_store_memory=5120*1024*1024)
