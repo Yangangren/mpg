@@ -312,17 +312,18 @@ def built_NADP_parser():
     mode = parser.parse_args().mode
 
     if mode == 'testing':
-        test_dir = '../results/NADP/experiment-2020-09-23-20-52-24'
+        test_dir = '../results/NADP/origin_no_disturb/experiment-2022-11-09-14-36-43'
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
         params.update(dict(test_dir=test_dir,
-                           test_iter_list=[32000],
+                           test_iter_list=[0],
                            test_log_dir=test_log_dir,
                            num_eval_episode=5,
-                           num_eval_agent=5,
+                           num_eval_agent=1,
                            eval_log_interval=1,
-                           fixed_steps=200))
+                           fixed_steps=70,
+                           eval_render=True))
         for key, val in params.items():
             parser.add_argument("-" + key, default=val)
         return parser.parse_args()
@@ -366,7 +367,7 @@ def built_NADP_parser():
     parser.add_argument('--num_eval_episode', type=int, default=5)
     parser.add_argument('--eval_log_interval', type=int, default=1)
     parser.add_argument('--fixed_steps', type=int, default=200)
-    parser.add_argument('--eval_render', type=bool, default=True)
+    parser.add_argument('--eval_render', type=bool, default=False)
     num_eval_episode = parser.parse_args().num_eval_episode
     parser.add_argument('--num_eval_agent', type=int, default=num_eval_episode)
 
@@ -844,4 +845,4 @@ def main(alg_name):
 
 
 if __name__ == '__main__':
-    main('MPG-v2')
+    main('NADP')
