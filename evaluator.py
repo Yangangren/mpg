@@ -84,7 +84,7 @@ class Evaluator(object):
                 obs, reward, done, info = self.env.step(action.numpy())
                 if render: self.env.render()
                 reward_list.append(reward[0])
-                info_list.append(info[0])
+                info_list.append(info)
         else:
             while not done:
                 processed_obs = self.preprocessor.tf_process_obses(obs)
@@ -234,6 +234,8 @@ class Evaluator(object):
             logger.info('Evaluator_info: {}, {}'.format(self.get_stats(), mean_metric_dict))
         self.eval_times += 1
 
+    def get_eval_times(self):
+        return self.eval_times
 
 def test_trained_model(model_dir, ppc_params_dir, iteration):
     from train_script import built_mixedpg_parser

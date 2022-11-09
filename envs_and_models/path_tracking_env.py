@@ -487,7 +487,8 @@ class PathTrackingEnv(gym.Env, ABC):
         return done
 
     def render(self, mode='human'):
-        plt.cla()
+        plt.clf()
+        ax = plt.axes([-0.05, -0.05, 1.1, 1.1])
         v_x, v_y, r, delta_y, delta_phi, x = self.veh_state[0, 0], self.veh_state[0, 1], self.veh_state[0, 2], \
                                              self.veh_state[0, 3], self.veh_state[0, 4], self.veh_state[0, 5]
         v_x, v_y, r, y, phi, x = self.veh_full_state[0, 0], self.veh_full_state[0, 1], \
@@ -502,11 +503,11 @@ class PathTrackingEnv(gym.Env, ABC):
 
         plt.title("Demo")
         range_x, range_y = 100, 100
-        ax = plt.axes(xlim=(x - range_x / 2, x + range_x / 2),
-                      ylim=(-50, 50))
-        ax.add_patch(plt.Rectangle((x - range_x / 2, -50),
-                                   100, 100, edgecolor='black',
-                                   facecolor='none'))
+        # ax = plt.axes(xlim=(x - range_x / 2, x + range_x / 2),
+        #               ylim=(-50, 50))
+        # ax.add_patch(plt.Rectangle((x - range_x / 2, -50),
+        #                            100, 100, edgecolor='black',
+        #                            facecolor='none'))
         plt.axis('equal')
         plt.axis('off')
         path_xs = np.linspace(x - range_x / 2, x + range_x / 2, 1000)
@@ -529,7 +530,7 @@ class PathTrackingEnv(gym.Env, ABC):
             plt.plot([LD_x + x, LU_x + x], [LD_y + y, LU_y + y], color=color)
 
         draw_rotate_rec(x, y, phi, 4.8, 2.2)
-        text_x, text_y_start = x - 20 - range_x / 2 - 20, 30
+        text_x, text_y_start = x - range_x / 2, 30
         ge = iter(range(0, 1000, 4))
         plt.text(text_x, text_y_start - next(ge), 'time: {:.2f}s'.format(self.simulation_time))
         plt.text(text_x, text_y_start - next(ge), 'x: {:.2f}'.format(x))
@@ -592,4 +593,4 @@ def test_environment():
 
 
 if __name__ == '__main__':
-    test_environment()
+    test_path_tracking_env()
