@@ -70,6 +70,7 @@ def built_NADP_parser():
     parser.add_argument('--mode', type=str, default='training') # training testing
     mode, noise_mode = parser.parse_args().mode, parser.parse_args().noise_mode
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--rho', type=float, default=20)
 
     if mode == 'testing':
         test_dir = '../results/NADP/{}/experiment-2020-09-23-20-52-24'.format(noise_mode)

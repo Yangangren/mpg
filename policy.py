@@ -69,10 +69,16 @@ class PolicyWithQs(tf.Module):
         adv_policy_lr = PolynomialDecay(*adv_policy_lr_schedule)
         self.adv_policy_optimizer = self.tf.keras.optimizers.Adam(adv_policy_lr, name='adv_policy_adam_opt')
 
-        self.Q1 = value_model_cls(obs_dim + act_dim + adv_act_dim, value_num_hidden_layers, value_num_hidden_units,
-                                  value_hidden_activation, 1, name='Q1')
-        self.Q1_target = value_model_cls(obs_dim + act_dim + adv_act_dim, value_num_hidden_layers, value_num_hidden_units,
-                                         value_hidden_activation, 1, name='Q1_target')
+        if self.noise_mode in ['no_noise', 'rand_noise']:
+            self.Q1 = value_model_cls(obs_dim + act_dim, value_num_hidden_layers, value_num_hidden_units,
+                                    value_hidden_activation, 1, name='Q1')
+            self.Q1_target = value_model_cls(obs_dim + act_dim, value_num_hidden_layers, value_num_hidden_units,
+                                             value_hidden_activation, 1, name='Q1_target')
+        else:
+            self.Q1 = value_model_cls(obs_dim + act_dim + adv_act_dim, value_num_hidden_layers, value_num_hidden_units,
+                                      value_hidden_activation, 1, name='Q1')
+            self.Q1_target = value_model_cls(obs_dim + act_dim + adv_act_dim, value_num_hidden_layers, value_num_hidden_units,
+                                      value_hidden_activation, 1, name='Q1_target')
         self.Q1_target.set_weights(self.Q1.get_weights())
         value_lr = PolynomialDecay(*value_lr_schedule)
         self.Q1_optimizer = self.tf.keras.optimizers.Adam(value_lr, name='Q1_adam_opt')
@@ -164,7 +170,7 @@ class PolicyWithQs(tf.Module):
                 self.Q1_optimizer.apply_gradients(zip(q1_grad, self.Q1.trainable_weights))
                 if iteration % self.delay_update == 0:
                     self.policy_optimizer.apply_gradients(zip(policy_grad, self.policy.trainable_weights))
-                    if (self.noise_mode == 'adv_noise') and (iteration % self.update_adv_interval == 0):
+                    if (self.noise_mode.startswith('adv_noise')) and (iteration % self.update_adv_interval == 0):
                         self.adv_policy_optimizer.apply_gradients(zip(adv_policy_grad, self.adv_policy.trainable_weights))
                     if self.alpha == 'auto':
                         alpha_grad = grads[-1:]
@@ -257,9 +263,12 @@ class PolicyWithQs(tf.Module):
                 return actions, logps
 
     @tf.function
-    def compute_Q1(self, obs, act, adv_act):
+    def compute_Q1(self, obs, act, adv_act=0.):
         with self.tf.name_scope('compute_Q1') as scope:
-            Q_inputs = self.tf.concat([obs, act, adv_act], axis=-1)
+            if self.noise_mode.startswith('adv_noise'):
+                Q_inputs = self.tf.concat([obs, act, adv_act], axis=-1)
+            else:
+                Q_inputs = self.tf.concat([obs, act], axis=-1)
             return tf.squeeze(self.Q1(Q_inputs), axis=1)
 
     @tf.function
@@ -269,9 +278,12 @@ class PolicyWithQs(tf.Module):
             return tf.squeeze(self.Q2(Q_inputs), axis=1)
 
     @tf.function
-    def compute_Q1_target(self, obs, act, adv_act):
+    def compute_Q1_target(self, obs, act, adv_act=0.):
         with self.tf.name_scope('compute_Q1_target') as scope:
-            Q_inputs = self.tf.concat([obs, act, adv_act], axis=-1)
+            if self.noise_mode.startswith('adv_noise'):
+                Q_inputs = self.tf.concat([obs, act, adv_act], axis=-1)
+            else:
+                Q_inputs = self.tf.concat([obs, act], axis=-1)
             return tf.squeeze(self.Q1_target(Q_inputs), axis=1)
 
     @tf.function
