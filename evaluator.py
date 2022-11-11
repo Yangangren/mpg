@@ -235,6 +235,8 @@ class Evaluator(object):
             logger.info('Evaluator_info: {}, {}'.format(self.get_stats(), mean_metric_dict))
         self.eval_times += 1
 
+    def get_eval_times(self):
+        return self.eval_times
 
 def test_trained_model(model_dir, ppc_params_dir, iteration):
     from train_script import built_mixedpg_parser
