@@ -48,6 +48,8 @@ class NADPLearner(object):
         self.info_for_buffer = {}
         self.counter = 0
         self.num_batch_reuse = self.args.num_batch_reuse
+        self.adv_act_scale = self.model.adv_act_scale
+        self.adv_act_bias = self.model.adv_act_bias
 
     def get_stats(self):
         return self.stats
@@ -93,6 +95,63 @@ class NADPLearner(object):
 
         processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
         processed_obses_tile_list = [processed_obses_tile]
+        if self.args.noise_mode == 'no_noise':
+            adv_actions_tile = - (self.adv_act_bias / self.adv_act_scale) * self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
+        else:
+            mean = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
+            std = self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
+            act_dist = tfp.distributions.MultivariateNormalDiag(mean, std)
+            act_dist = tfp.distributions.TransformedDistribution(distribution=act_dist, bijector=tfb.Tanh())
+            adv_actions_tile = act_dist.sample()
+        actions_tile_list = [actions_tile]
+        rewards_sum_tile = self.tf.zeros((obses_tile.shape[0],))
+        rewards_sum_list = [rewards_sum_tile]
+        gammas_list = [self.tf.ones((obses_tile.shape[0],))]
+
+        self.model.reset(obses_tile)
+        max_num_rollout = max(self.num_rollout_list_for_q_estimation)
+        if max_num_rollout > 0:
+            for ri in range(max_num_rollout):
+                obses_tile, rewards = self.model.rollout_out(actions_tile, adv_actions_tile)
+                processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
+                processed_rewards = self.preprocessor.tf_process_rewards(rewards)
+                rewards_sum_tile += self.tf.pow(self.args.gamma, ri) * processed_rewards
+                rewards_sum_list.append(rewards_sum_tile)
+                actions_tile, _ = self.policy_with_value.compute_action(processed_obses_tile)
+                if self.args.noise_mode == 'no_noise':
+                    adv_actions_tile = - (self.adv_act_bias / self.adv_act_scale) * self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
+                else:
+                    mean = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
+                    std = self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
+                    act_dist = tfp.distributions.MultivariateNormalDiag(mean, std)
+                    act_dist = tfp.distributions.TransformedDistribution(distribution=act_dist, bijector=tfb.Tanh())
+                    adv_actions_tile = act_dist.sample()
+                processed_obses_tile_list.append(processed_obses_tile)
+                actions_tile_list.append(actions_tile)
+                gammas_list.append(self.tf.pow(self.args.gamma, ri + 1) * self.tf.ones((obses_tile.shape[0],)))
+
+        with self.tf.name_scope('compute_all_model_returns') as scope:
+            all_Qs = self.policy_with_value.compute_Q1_target(
+                self.tf.concat(processed_obses_tile_list, 0), self.tf.concat(actions_tile_list, 0))
+            all_rewards_sums = self.tf.concat(rewards_sum_list, 0)
+            all_gammas = self.tf.concat(gammas_list, 0)
+            all_targets = all_rewards_sums + all_gammas * all_Qs
+
+            final = self.tf.reshape(all_targets, (max_num_rollout + 1, self.M, -1))
+            all_model_returns = self.tf.reduce_mean(final, axis=1)
+        selected_model_returns = []
+        for num_rollout in self.num_rollout_list_for_q_estimation:
+            selected_model_returns.append(all_model_returns[num_rollout])
+
+        selected_model_returns_flatten = self.tf.concat(selected_model_returns, 0)
+        return self.tf.stop_gradient(selected_model_returns_flatten)
+
+    def model_rollout_for_q_estimation_adv(self, start_obses, start_actions):
+        obses_tile = self.tf.tile(start_obses, [self.M, 1])
+        actions_tile = self.tf.tile(start_actions, [self.M, 1])
+
+        processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
+        processed_obses_tile_list = [processed_obses_tile]
         adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
         actions_tile_list = [actions_tile]
         adv_actions_tile_list = [adv_actions_tile]
@@ -110,16 +169,7 @@ class NADPLearner(object):
                 rewards_sum_tile += self.tf.pow(self.args.gamma, ri) * processed_rewards
                 rewards_sum_list.append(rewards_sum_tile)
                 actions_tile, _ = self.policy_with_value.compute_action(processed_obses_tile)
-                if self.args.noise_mode == 'adv_noise':
-                    adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
-                elif self.args.noise_mode == 'no_noise':
-                    adv_actions_tile = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
-                else:
-                    mean = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
-                    std = self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
-                    act_dist = tfp.distributions.MultivariateNormalDiag(mean, std)
-                    act_dist = tfp.distributions.TransformedDistribution(distribution=act_dist, bijector=tfb.Tanh())
-                    adv_actions_tile = act_dist.sample()
+                adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
                 processed_obses_tile_list.append(processed_obses_tile)
                 actions_tile_list.append(actions_tile)
                 adv_actions_tile_list.append(adv_actions_tile)
@@ -142,13 +192,68 @@ class NADPLearner(object):
         selected_model_returns_flatten = self.tf.concat(selected_model_returns, 0)
         return self.tf.stop_gradient(selected_model_returns_flatten)
 
+    def model_rollout_for_q_estimation_smooth(self, start_obses, start_actions):
+        M = 25
+        obses_tile = self.tf.tile(start_obses, [M, 1])
+        actions_tile = self.tf.tile(start_actions, [M, 1])
+        processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
+        processed_obses_tile_list = [processed_obses_tile]
+        adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
+        actions_tile_list = [actions_tile]
+        adv_actions_tile_list = [adv_actions_tile]
+        rewards_sum_tile = self.tf.zeros((obses_tile.shape[0],))
+        rewards_sum_list = [rewards_sum_tile]
+        gammas_list = [self.tf.ones((obses_tile.shape[0],))]
+        self.model.reset(obses_tile)
+        max_num_rollout = 1
+        if max_num_rollout > 0:
+            for ri in range(max_num_rollout):
+                obses_tile, rewards = self.model.rollout_out(actions_tile, adv_actions_tile)
+                processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
+                processed_rewards = self.preprocessor.tf_process_rewards(rewards)
+                rewards_sum_tile += self.tf.pow(self.args.gamma, ri) * processed_rewards
+                rewards_sum_list.append(rewards_sum_tile)
+                actions_tile, _ = self.policy_with_value.compute_action(processed_obses_tile)
+                adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
+                processed_obses_tile_list.append(processed_obses_tile)
+                actions_tile_list.append(actions_tile)
+                adv_actions_tile_list.append(adv_actions_tile)
+                gammas_list.append(self.tf.pow(self.args.gamma, ri + 1) * self.tf.ones((obses_tile.shape[0],)))
+
+        with self.tf.name_scope('compute_all_model_returns') as scope:
+            all_Qs = self.policy_with_value.compute_Q1_target(
+                processed_obses_tile_list[-1], actions_tile_list[-1], adv_actions_tile_list[-1])
+            all_rewards_sums = rewards_sum_list[-1]
+            all_gammas = gammas_list[-1]
+            all_targets = all_rewards_sums + all_gammas * all_Qs
+            final = self.tf.reshape(all_targets, (self.batch_size, M))
+            final_max = self.tf.reduce_max(final, axis=1)
+            final_max_appr = 1/self.args.rho * self.tf.reduce_logsumexp(self.args.rho * final + self.tf.math.log(1/M), axis=1)
+            # self.tf.print(self.tf.reduce_max(self.tf.abs((final_max_appr-final_max)/final_max)),
+            #               self.tf.reduce_max(self.tf.abs(final_max_appr-final_max)))
+        if self.args.noise_mode == 'adv_noise_max':
+            return self.tf.stop_gradient(final_max)
+        else:
+            assert self.args.noise_mode == 'adv_noise_smooth'
+            return self.tf.stop_gradient(final_max_appr)
+
     def model_rollout_for_policy_update(self, start_obses):
         max_num_rollout = max(self.num_rollout_list_for_policy_update)
 
         obses_tile = self.tf.tile(start_obses, [self.M, 1])
         processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
         actions_tile, _ = self.policy_with_value.compute_action(processed_obses_tile)
-        adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
+
+        if self.args.noise_mode.startswith('adv_noise'):
+            adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
+        elif self.args.noise_mode == 'no_noise':
+            adv_actions_tile = - (self.adv_act_bias / self.adv_act_scale) * self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
+        else:
+            mean = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
+            std = self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
+            act_dist = tfp.distributions.MultivariateNormalDiag(mean, std)
+            act_dist = tfp.distributions.TransformedDistribution(distribution=act_dist, bijector=tfb.Tanh())
+            adv_actions_tile = act_dist.sample()
         processed_obses_tile_list = [processed_obses_tile]
         actions_tile_list = [actions_tile]
         adv_actions_tile_list = [adv_actions_tile]
@@ -165,10 +270,10 @@ class NADPLearner(object):
                 rewards_sum_tile += self.tf.pow(self.args.gamma, ri) * processed_rewards
                 rewards_sum_list.append(rewards_sum_tile)
                 actions_tile, _ = self.policy_with_value.compute_action(processed_obses_tile)
-                if self.args.noise_mode == 'adv_noise':
+                if self.args.noise_mode.startswith('adv_noise'):
                     adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
                 elif self.args.noise_mode == 'no_noise':
-                    adv_actions_tile = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
+                    adv_actions_tile = - (self.adv_act_bias / self.adv_act_scale) * self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
                 else:
                     mean = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
                     std = self.tf.ones(shape=(self.batch_size, self.args.adv_act_dim))
@@ -181,9 +286,13 @@ class NADPLearner(object):
                 gammas_list.append(self.tf.pow(self.args.gamma, ri + 1) * self.tf.ones((obses_tile.shape[0],)))
 
         with self.tf.name_scope('compute_all_model_returns') as scope:
-            all_Qs = self.policy_with_value.compute_Q1(
-                self.tf.concat(processed_obses_tile_list, 0), self.tf.concat(actions_tile_list, 0),
-                self.tf.concat(adv_actions_tile_list, 0),)
+            if self.args.noise_mode.startswith('adv_noise'):
+                all_Qs = self.policy_with_value.compute_Q1(
+                        self.tf.concat(processed_obses_tile_list, 0), self.tf.concat(actions_tile_list, 0),
+                        self.tf.concat(adv_actions_tile_list, 0),)
+            else:
+                all_Qs = self.policy_with_value.compute_Q1(
+                    self.tf.concat(processed_obses_tile_list, 0), self.tf.concat(actions_tile_list, 0),)
             all_rewards_sums = self.tf.concat(rewards_sum_list, 0)
             all_gammas = self.tf.concat(gammas_list, 0)
 
@@ -203,11 +312,20 @@ class NADPLearner(object):
     @tf.function
     def q_forward_and_backward(self, mb_obs, mb_actions):
         processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
-        mb_adv_actions = self.tf.zeros(shape=(self.batch_size, self.args.adv_act_dim))
-        model_targets = self.model_rollout_for_q_estimation(mb_obs, mb_actions)
+        mb_adv_actions, _ = self.policy_with_value.compute_adv_action(processed_mb_obs)
+        if self.args.noise_mode in ['adv_noise_smooth', 'adv_noise_max']:
+            model_targets = self.model_rollout_for_q_estimation_smooth(mb_obs, mb_actions)
+        elif self.args.noise_mode == 'adv_noise':
+            model_targets = self.model_rollout_for_q_estimation_adv(mb_obs, mb_actions)
+        else:
+            assert self.args.noise_mode in ['no_noise', 'rand_noise'], 'no noise model'
+            model_targets = self.model_rollout_for_q_estimation(mb_obs, mb_actions)
         with self.tf.GradientTape() as tape:
             with self.tf.name_scope('q_loss') as scope:
-                q_pred = self.policy_with_value.compute_Q1(processed_mb_obs, mb_actions, mb_adv_actions)
+                if self.args.noise_mode in ['no_noise', 'rand_noise']:
+                    q_pred = self.policy_with_value.compute_Q1(processed_mb_obs, mb_actions)
+                else:
+                    q_pred = self.policy_with_value.compute_Q1(processed_mb_obs, mb_actions, mb_adv_actions)
                 q_loss = 0.5 * self.tf.reduce_mean(self.tf.square(q_pred - model_targets))
         with self.tf.name_scope('q_gradient') as scope:
             q_gradient = tape.gradient(q_loss, self.policy_with_value.Q1.trainable_weights)
@@ -222,7 +340,7 @@ class NADPLearner(object):
         with self.tf.name_scope('policy_jacobian') as scope:
             policy_gradient = tape.gradient(policy_loss,
                                             self.policy_with_value.policy.trainable_weights)
-            if self.args.noise_mode == 'adv_noise':
+            if self.args.noise_mode.startswith('adv_noise'):
                 adv_policy_gradient = tape.gradient(adv_policy_loss,
                                             self.policy_with_value.adv_policy.trainable_weights)
             else:
