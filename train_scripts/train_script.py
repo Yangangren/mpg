@@ -67,7 +67,7 @@ def set_seed(seed):
 def built_NADP_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--noise_mode', type=str, default='adv_noise')  # adv_noise rand_noise no_noise adv_noise_smooth
-    parser.add_argument('--mode', type=str, default='training') # training testing
+    parser.add_argument('--mode', type=str, default='testing') # training testing
     mode, noise_mode = parser.parse_args().mode, parser.parse_args().noise_mode
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--rho', type=float, default=20)
@@ -77,8 +77,10 @@ def built_NADP_parser():
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
+        disturb_env = [-0.174 + i * 0.0348 for i in range(11)]
         params.update(dict(test_dir=test_dir,
-                           test_iter_list=[32000],
+                           disturb_env=disturb_env,
+                           test_iter_list=[99000] * len(disturb_env),
                            test_log_dir=test_log_dir,
                            num_eval_episode=5,
                            num_eval_agent=5,
