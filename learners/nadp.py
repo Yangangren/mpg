@@ -198,7 +198,11 @@ class NADPLearner(object):
         actions_tile = self.tf.tile(start_actions, [M, 1])
         processed_obses_tile = self.preprocessor.tf_process_obses(obses_tile)
         processed_obses_tile_list = [processed_obses_tile]
-        adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
+        if self.args.noise_mode == 'adv_noise_smooth_uniform':
+            adv_actions_tile = tfd.Uniform(low=-1.0 * self.tf.ones(shape=(actions_tile.shape[0], 1)),
+                                           high=1.0 * self.tf.ones(shape=(actions_tile.shape[0], 1))).sample()
+        else:
+            adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
         actions_tile_list = [actions_tile]
         adv_actions_tile_list = [adv_actions_tile]
         rewards_sum_tile = self.tf.zeros((obses_tile.shape[0],))
@@ -214,7 +218,11 @@ class NADPLearner(object):
                 rewards_sum_tile += self.tf.pow(self.args.gamma, ri) * processed_rewards
                 rewards_sum_list.append(rewards_sum_tile)
                 actions_tile, _ = self.policy_with_value.compute_action(processed_obses_tile)
-                adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
+                if self.args.noise_mode == 'adv_noise_smooth_uniform':
+                    adv_actions_tile = tfd.Uniform(low=-1.0 * self.tf.ones(shape=(actions_tile.shape[0], 1)),
+                                                   high=1.0 * self.tf.ones(shape=(actions_tile.shape[0], 1))).sample()
+                else:
+                    adv_actions_tile, _ = self.policy_with_value.compute_adv_action(processed_obses_tile)
                 processed_obses_tile_list.append(processed_obses_tile)
                 actions_tile_list.append(actions_tile)
                 adv_actions_tile_list.append(adv_actions_tile)
@@ -234,7 +242,7 @@ class NADPLearner(object):
         if self.args.noise_mode == 'adv_noise_max':
             return self.tf.stop_gradient(final_max)
         else:
-            assert self.args.noise_mode == 'adv_noise_smooth'
+            assert self.args.noise_mode == 'adv_noise_smooth' or self.args.noise_mode == 'adv_noise_smooth_uniform'
             return self.tf.stop_gradient(final_max_appr)
 
     def model_rollout_for_policy_update(self, start_obses):
@@ -313,7 +321,7 @@ class NADPLearner(object):
     def q_forward_and_backward(self, mb_obs, mb_actions):
         processed_mb_obs = self.preprocessor.tf_process_obses(mb_obs)
         mb_adv_actions, _ = self.policy_with_value.compute_adv_action(processed_mb_obs)
-        if self.args.noise_mode in ['adv_noise_smooth', 'adv_noise_max']:
+        if self.args.noise_mode in ['adv_noise_smooth', 'adv_noise_max', 'adv_noise_smooth_uniform']:
             model_targets = self.model_rollout_for_q_estimation_smooth(mb_obs, mb_actions)
         elif self.args.noise_mode == 'adv_noise':
             model_targets = self.model_rollout_for_q_estimation_adv(mb_obs, mb_actions)

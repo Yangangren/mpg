@@ -23,10 +23,10 @@ class Tester(object):
 
     def test(self):
         logger.info('testing beginning')
-        for ite in self.args.test_iter_list:
+        for i, ite in enumerate(self.args.test_iter_list):
             logger.info('testing {}-th iter model'.format(ite))
             model_load_dir = self.args.test_dir + '/models'
             ppc_params_load_dir = self.args.test_dir + '/models'
             self.evaluate_saved_model(model_load_dir, ppc_params_load_dir, ite)
-            self.evaluator.run_evaluation(ite)
+            self.evaluator.run_evaluation(i)
 

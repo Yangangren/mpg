@@ -10,219 +10,237 @@
 import copy
 import os
 
-import matplotlib.pyplot as plt
+import argparse
+import datetime
 import numpy as np
+import json
 import pandas as pd
 import seaborn as sns
 import tensorflow as tf
 from tensorflow.core.util import event_pb2
+from tester import Tester
+from policy import PolicyWithQs
+from evaluator import Evaluator
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import MultipleLocator
+from matplotlib.ticker import MaxNLocator
 
-sns.set(style="darkgrid")
-SMOOTHFACTOR = 0.8
+# plt.rcParams['font.family'] = 'serif'
+# plt.rcParams[u'font.sans-serif'] = ['SIMSUN']
+# plt.rcParams['axes.unicode_minus'] = False
 
+NAME2POLICIES = dict([('PolicyWithQs', PolicyWithQs)])
+NAME2EVALUATORS = dict([('Evaluator', Evaluator)])
 
-def help_func(env):
-    if env == 'path_tracking_env':
+sns.set(style=None)
+
+def help_func():
+    if 1:
         tag2plot = ['episode_return', 'episode_len', 'delta_y_mse', 'delta_phi_mse', 'delta_v_mse',
                     'stationary_rew_mean', 'steer_mse', 'acc_mse']
-        alg_list = ['MPG-v3', 'MPG-v2', 'NDPG', 'NADP', 'TD3', 'SAC']
-        lbs = ['MPG-v1', 'MPG-v2', r'$n$-step DPG', r'$n$-step ADP', 'TD3', 'SAC']
+        alg_list = ['no_noise', 'adv_noise', 'adv_noise_smooth', 'adv_noise_smooth_uniform']
+        lbs = ['ADP', 'RaRL', 'SaAC', 'SaAC-u']
         palette = "bright"
         goal_perf_list = [-200, -100, -50, -30, -20, -10, -5]
-        dir_str = './results/{}/data2plot'
+        dir_str = './results/NADP/{}'
     else:
         tag2plot = ['episode_return', 'episode_len', 'x_mse', 'theta_mse', 'xdot_mse', 'thetadot_mse']
         alg_list = ['MPG-v2', 'NADP', 'TD3', 'SAC']
         lbs = ['MPG-v2', r'$n$-step ADP', 'TD3', 'SAC']
         palette = [(1.0, 0.48627450980392156, 0.0),
-                    (0.9098039215686274, 0.0, 0.043137254901960784),
-                    (0.5450980392156862, 0.16862745098039217, 0.8862745098039215),
-                    (0.6235294117647059, 0.2823529411764706, 0.0),]
+                   (0.9098039215686274, 0.0, 0.043137254901960784),
+                   (0.5450980392156862, 0.16862745098039217, 0.8862745098039215),
+                   (0.6235294117647059, 0.2823529411764706, 0.0),]
         goal_perf_list = [-20, -10, -2, -1, -0.5, -0.1, -0.01]
         dir_str = './results/{}/data2plot_mujoco'
     return tag2plot, alg_list, lbs, palette, goal_perf_list, dir_str
 
 
-def plot_eval_results_of_all_alg_n_runs(env, dirs_dict_for_plot=None):
-    tag2plot, alg_list, lbs, palette, _, dir_str = help_func(env)
+def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
+    tag2plot = ['evaluation/episode_return', 'evaluation/delta_y_mse', 'evaluation/delta_phi_mse', 'evaluation/delta_v_mse']
+    env_list = ['NADP']
+    task_list = ['no_noise', 'adv_noise', 'adv_noise_smooth', 'adv_noise_smooth_uniform']
+    palette = "bright"
+    lbs = ['ADP', 'RaRL', 'SaAC', 'SaAC-u']
+    dir_str = './results/{}/{}'
     df_list = []
-    df_in_one_run_of_one_alg = {}
-    for alg in alg_list:
-        data2plot_dir = dir_str.format(alg)
-        data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
-        for num_run, dir in enumerate(data2plot_dirs_list):
-            eval_dir = data2plot_dir + '/' + dir + '/logs/evaluator'
-            eval_file = os.path.join(eval_dir,
-                                     [file_name for file_name in os.listdir(eval_dir) if file_name.startswith('events')][0])
-            eval_summarys = tf.data.TFRecordDataset([eval_file])
-            data_in_one_run_of_one_alg = {key: [] for key in tag2plot}
-            data_in_one_run_of_one_alg.update({'iteration': []})
-            for eval_summary in eval_summarys:
-                event = event_pb2.Event.FromString(eval_summary.numpy())
-                for v in event.summary.value:
-                    t = tf.make_ndarray(v.tensor)
-                    for tag in tag2plot:
-                        if tag == v.tag[11:]:
-                            data_in_one_run_of_one_alg[tag].append((1-SMOOTHFACTOR)*data_in_one_run_of_one_alg[tag][-1] + SMOOTHFACTOR*float(t)
-                                                                   if data_in_one_run_of_one_alg[tag] else float(t))
-                            data_in_one_run_of_one_alg['iteration'].append(int(event.step))
-            len1, len2 = len(data_in_one_run_of_one_alg['iteration']), len(data_in_one_run_of_one_alg[tag2plot[0]])
-            period = int(len1/len2)
-            data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i*period]/10000. for i in range(len2)]
-
-            data_in_one_run_of_one_alg.update(dict(algorithm=alg, num_run=num_run))
-            df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
-            df_list.append(df_in_one_run_of_one_alg)
+    for alg in env_list:
+        for task in task_list:
+            data2plot_dir = dir_str.format(alg, task)
+            data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
+            for num_run, dir in enumerate(data2plot_dirs_list):
+                opt_dir = data2plot_dir + '/' + dir + '/tester'
+                opt_file = os.path.join(opt_dir,
+                                        [file_name for file_name in os.listdir(opt_dir) if
+                                         file_name.startswith('events')][0])
+                opt_summarys = tf.data.TFRecordDataset([opt_file])
+                data_in_one_run_of_one_alg = {key: [] for key in tag2plot}
+                data_in_one_run_of_one_alg.update({'iteration': []})
+                for opt_summary in opt_summarys:
+                    event = event_pb2.Event.FromString(opt_summary.numpy())
+                    for v in event.summary.value:
+                        t = tf.make_ndarray(v.tensor)
+                        for tag in tag2plot:
+                            if tag in v.tag:
+                                data_in_one_run_of_one_alg[tag].append(float(t))
+                                data_in_one_run_of_one_alg['iteration'].append(int(event.step))
+                len1, len2 = len(data_in_one_run_of_one_alg['iteration']), len(data_in_one_run_of_one_alg[tag2plot[0]])
+                period = int(len1 / len2)
+                data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i * period] / 10000. for
+                                                           i in range(len2)]
+                if fname is not None:
+                    data_in_one_run_of_one_alg = {key: val[0::5] for key, val in data_in_one_run_of_one_alg.items()}
+                    WINDOWSIZE = 5
+                else:
+                    data_in_one_run_of_one_alg = {key: val[:] for key, val in data_in_one_run_of_one_alg.items()}
+                    WINDOWSIZE = 2
+                data_in_one_run_of_one_alg.update(dict(algorithm=alg, task=task, num_run=num_run))
+                df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
+                for tag in tag2plot:
+                    df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
+                df_list.append(df_in_one_run_of_one_alg)
     total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
-    figsize = (20, 8)
-    axes_size = [0.11, 0.11, 0.89, 0.89] if env == 'path_tracking_env' else [0.095, 0.11, 0.905, 0.89]
+    figsize = (12, 8)
     fontsize = 25
-    f1 = plt.figure(1, figsize=figsize)
-    ax1 = f1.add_axes(axes_size)
-    sns.lineplot(x="iteration", y="episode_return", hue="algorithm",
-                 data=total_dataframe, linewidth=2, palette=palette,
-                 )
-    base = -30 if env == 'path_tracking_env' else -2
-    basescore = sns.lineplot(x=[0., 10.], y=[base, base], linewidth=2, color='black', linestyle='--')
-    print(ax1.lines[0].get_data())
-    ax1.set_ylabel('Episode Return', fontsize=fontsize)
-    ax1.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    handles, labels = ax1.get_legend_handles_labels()
-    labels = lbs
-    ax1.legend(handles=handles+[basescore.lines[-1]], labels=labels+['Base score'], loc='lower right', frameon=False, fontsize=fontsize)
-    lim = (-800, 50) if env == 'path_tracking_env' else (-60, 5)
-    plt.xlim(0., 10.2)
-    plt.ylim(*lim)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
-    if env == 'path_tracking_env':
-        f2 = plt.figure(2, figsize=figsize)
-        ax2 = f2.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="delta_y_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     )
-        ax2.set_ylabel('Position Error [m]', fontsize=fontsize)
-        ax2.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+
+    if fname is not None:
+        f2 = plt.figure(1, figsize=figsize)
+        f2.add_axes([0.13, 0.12, 0.86, 0.87])
+        ax2 = sns.boxplot(x="iteration", y="evaluation/episode_return", hue="task",
+                          data=total_dataframe, palette=palette,)
+        ax2.xaxis.set_major_locator(MaxNLocator(integer=True))
+        plt.ylim(-10000, 50)
         handles, labels = ax2.get_legend_handles_labels()
         labels = lbs
-        ax2.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
-        plt.xlim(0., 10.2)
+        ax2.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+        ax2.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax2.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
         plt.yticks(fontsize=fontsize)
         plt.xticks(fontsize=fontsize)
+        plt.savefig('./test_mean_std.pdf')
+        plt.show()
 
-        f3 = plt.figure(3, figsize=figsize)
-        ax3 = f3.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="delta_phi_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     legend=False)
-        ax3.set_ylabel('Heading Angle Error [rad]', fontsize=fontsize)
-        ax3.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        plt.xlim(0., 10.2)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
-
-        f4 = plt.figure(4, figsize=figsize)
-        ax4 = f4.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="delta_v_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     legend=False)
-        ax4.set_ylabel('Velocity Error [m/s]', fontsize=fontsize)
-        ax4.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        plt.xlim(0., 10.2)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
-
-        f5 = plt.figure(5, figsize=figsize)
-        ax5 = f5.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="steer_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     )
-        ax5.set_ylabel('Front Wheel Angle [rad]', fontsize=fontsize)
-        ax5.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        handles, labels = ax5.get_legend_handles_labels()
-        labels = lbs
-        ax5.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
-        plt.xlim(0., 10.2)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
-
-        f6 = plt.figure(6, figsize=figsize)
-        ax6 = f6.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="acc_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     legend=False)
-        ax6.set_ylabel('Acceleration [$m^2$/s]', fontsize=fontsize)
-        ax6.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        plt.xlim(0., 10.2)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
     else:
-        f2 = plt.figure(2, figsize=figsize)
-        ax2 = f2.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="x_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     )
-        ax2.set_ylabel('Cart Position [m]', fontsize=fontsize)
-        ax2.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        handles, labels = ax2.get_legend_handles_labels()
+        f1 = plt.figure(1, figsize=(12, 8))
+        ax1 = f1.add_axes([0.13, 0.12, 0.85, 0.86])
+        sns.lineplot(x="iteration", y="evaluation/episode_return_smo", hue="task",
+                     data=total_dataframe, linewidth=2, palette=palette, ci=90)
+        plt.ylim(-500, 0)
+        plt.xlim(0, 10.)
+        handles, labels = ax1.get_legend_handles_labels()
         labels = lbs
-        ax2.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
-        plt.xlim(0., 10.2)
+        ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+        ax1.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax1.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
         plt.yticks(fontsize=fontsize)
         plt.xticks(fontsize=fontsize)
+        plt.savefig('./test_total_return.pdf')
+        plt.close(f1)
 
-        f3 = plt.figure(3, figsize=figsize)
-        ax3 = f3.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="theta_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     legend=False)
-        ax3.set_ylabel('Pole Angle [rad]', fontsize=fontsize)
-        ax3.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        plt.xlim(0., 10.2)
+        f2 = plt.figure(2, figsize=(16, 8))
+        ax2 = f2.add_axes([0.13, 0.12, 0.72, 0.87])
+        legend_list = []
+        for seed, df in enumerate(df_list):
+            if df['task'][0] == 'adv_noise':
+                ax2.plot(df['iteration'], df["evaluation/episode_return_smo"], linewidth=2)
+                legend_list.append('seed' + " " + str(seed))
+        plt.ylim(-3000, 0)
+        handles, labels = ax1.get_legend_handles_labels()
+        # ax2.legend(handles=handles, labels=legend_list, loc='upper right', frameon=False, fontsize=fontsize)
+        ax2.legend(legend_list, fontsize=20, frameon=False, loc=(1.0, 0.2))
+        ax2.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax2.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
         plt.yticks(fontsize=fontsize)
         plt.xticks(fontsize=fontsize)
+        plt.savefig('./rarl_every_return.pdf')
+        plt.close(f2)
 
-        f4 = plt.figure(4, figsize=figsize)
-        ax4 = f4.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="xdot_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     legend=False)
-        ax4.set_ylabel('Cart Velocity [m/s]', fontsize=fontsize)
+        f3 = plt.figure(3, figsize=(16, 8))
+        ax3 = f3.add_axes([0.13, 0.12, 0.72, 0.87])
+        for df in df_list:
+            if df['task'][0] == 'adv_noise_smooth':
+                sns.lineplot(x=df['iteration'], y=df["evaluation/episode_return_smo"], linewidth=2, palette=palette, ax=ax3)
+        plt.ylim(-8000, 0)
+        handles, labels = ax1.get_legend_handles_labels()
+        # ax3.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+        ax3.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax3.set_xlabel(r"Iteration$[\times 10^4]$", fontsize=fontsize)
+        plt.yticks(fontsize=fontsize)
+        plt.xticks(fontsize=fontsize)
+        plt.savefig('./saac_every_return.pdf')
+        plt.close(f3)
+
+        f4 = plt.figure(4, figsize=(16, 8))
+        ax4 = f4.add_axes([0.07, 0.11, 0.90, 0.87])
+        sns.lineplot(x="iteration", y="evaluation/delta_y_mse_smo", hue="task",
+                     data=total_dataframe, linewidth=2, palette=palette)
+        ax4.set_ylabel('Position Error [m]', fontsize=fontsize)
         ax4.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        plt.xlim(0., 10.2)
+        handles, labels = ax4.get_legend_handles_labels()
+        labels = lbs
+        ax4.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
+        plt.xlim(0., 10)
+        plt.ylim(0., 25)
         plt.yticks(fontsize=fontsize)
         plt.xticks(fontsize=fontsize)
+        plt.savefig('./position_error.pdf')
 
-        f5 = plt.figure(5, figsize=figsize)
-        ax5 = f5.add_axes(axes_size)
-        sns.lineplot(x="iteration", y="thetadot_mse", hue="algorithm",
-                     data=total_dataframe, linewidth=2, palette=palette,
-                     legend=False)
-        ax5.set_ylabel('Pole Angular Velocity [rad/s]', fontsize=fontsize)
+        f5 = plt.figure(5, figsize=(16, 8))
+        ax5 = f5.add_axes([0.07, 0.11, 0.90, 0.87])
+        sns.lineplot(x="iteration", y="evaluation/delta_v_mse_smo", hue="task",
+                     data=total_dataframe, linewidth=2, palette=palette, legend=False)
+        ax5.set_ylabel('Velocity Error [m/s]', fontsize=fontsize)
         ax5.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-        plt.xlim(0., 10.2)
+        # handles, labels = ax5.get_legend_handles_labels()
+        # ax5.legend(handles=handles[0:], labels=labels[0:])
+        plt.xlim(0., 10)
+        # plt.ylim(0., 40)
         plt.yticks(fontsize=fontsize)
         plt.xticks(fontsize=fontsize)
-    plt.show()
-    allresults = {}
-    results2print = {}
+        plt.savefig('./velocity_error.pdf')
 
-    for alg, group in total_dataframe.groupby('algorithm'):
-        allresults.update({alg: []})
-        for ite, group1 in group.groupby('iteration'):
-            mean = group1['episode_return'].mean()
-            std = group1['episode_return'].std()
-            allresults[alg].append((mean, std))
+        f6 = plt.figure(6, figsize=(16, 8))
+        ax6 = f6.add_axes([0.09, 0.11, 0.89, 0.87])
+        sns.lineplot(x="iteration", y="evaluation/delta_phi_mse_smo", hue="task",
+                     data=total_dataframe, linewidth=2, palette=palette, legend=False)
+        ax6.set_ylabel('Heading Angle Error [rad]', fontsize=fontsize)
+        ax6.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+        handles, labels = ax6.get_legend_handles_labels()
+        labels = lbs
+        # ax6.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
+        plt.xlim(0., 10)
+        # plt.ylim(0., 10)
+        plt.yticks(fontsize=fontsize)
+        plt.xticks(fontsize=fontsize)
+        plt.savefig('./heading_error.pdf')
 
-    for alg, result in allresults.items():
-        mean, std = sorted(result, key=lambda x: x[0])[-1]
-        results2print.update({alg: [mean, 2 * std]})
+        allresults = {}
+        results2print = {}
+        result2conv = {}
+        for alg, group in total_dataframe.groupby('task'):
+            allresults.update({alg: []})
+            result2conv.update({alg: []})
+            stop_flag = 0
+            for ite, group1 in group.groupby('iteration'):
+                mean = group1['evaluation/episode_return_smo'].mean()
+                if stop_flag != 1 and mean > -20.:
+                    result2conv[alg].append(ite)
+                    stop_flag = 1
+                std = group1['evaluation/episode_return_smo'].std()
+                allresults[alg].append((mean, std))
+            if stop_flag == 0:
+                result2conv[alg].append(np.inf)
 
-    print(results2print)
+        for alg, result in allresults.items():
+            mean, std = sorted(result, key=lambda x: x[0])[-1]
+            results2print.update({alg: [mean, std]})
+
+        print(results2print)
+        print(result2conv)
 
 
 def compute_convergence_speed(goal_perf, dirs_dict_for_plot=None):
-    _, alg_list, _, _, _, dir_str = help_func(env)
+    _, alg_list, _, _, _, dir_str = help_func()
     result_dict = {}
     for alg in alg_list:
         result_dict.update({alg: []})
@@ -230,7 +248,7 @@ def compute_convergence_speed(goal_perf, dirs_dict_for_plot=None):
         data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
         for num_run, dir in enumerate(data2plot_dirs_list):
             stop_flag = 0
-            eval_dir = data2plot_dir + '/' + dir + '/logs/evaluator'
+            eval_dir = data2plot_dir + '/' + dir + '/tester'
             eval_file = os.path.join(eval_dir,
                                      [file_name for file_name in os.listdir(eval_dir) if
                                       file_name.startswith('events')][0])
@@ -243,12 +261,14 @@ def compute_convergence_speed(goal_perf, dirs_dict_for_plot=None):
                         if stop_flag != 1:
                             t = tf.make_ndarray(v.tensor)
                             step = float(event.step)
-                            if 'episode_return' in v.tag:
+                            if 'evaluation/episode_return' in v.tag:
                                 if t > goal_perf:
                                     result_dict[alg].append(step)
                                     stop_flag = 1
             if stop_flag == 0:
                 result_dict[alg].append(np.inf)
+    for tag, value in result_dict.items():
+        print(tag, sum(value)/len(value))
     return result_dict
 
 
@@ -256,109 +276,158 @@ def min_n(inp_list, n):
     return sorted(inp_list)[:n]
 
 
-def plot_convergence_speed_for_different_goal_perf(env):
-    _, _, lbs, palette, goal_perf_list, dir_str = help_func(env)
-    result2print = {}
+def plot_trained_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
+    tag2plot = ['evaluation/episode_return']
+    env_list = ['NADP']
+    task_list = ['adv_noise', 'adv_noise_smooth']
+    palette = "bright"
+    lbs = ['RARL', 'SaAC']
+    dir_str = './results/{}/{}'
     df_list = []
-    for goal_perf in goal_perf_list:
-        result2print.update({goal_perf: dict()})
-        result_dict_for_this_goal_perf = compute_convergence_speed(goal_perf)
-        for alg in result_dict_for_this_goal_perf:
-            first_arrive_steps_list = result_dict_for_this_goal_perf[alg]
-            df_for_this_alg_this_goal = pd.DataFrame(dict(algorithm=alg,
-                                                          goal_perf=str(goal_perf),
-                                                          first_arrive_steps=list(map(lambda x: x/10000., min_n(first_arrive_steps_list, 3)))))
-            result2print[goal_perf].update({alg: [np.mean(min_n(first_arrive_steps_list, 3)), 2*np.std(min_n(first_arrive_steps_list, 3))]})
-            df_list.append(df_for_this_alg_this_goal)
+    for alg in env_list:
+        for task in task_list:
+            data2plot_dir = dir_str.format(alg, task)
+            data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
+            for num_run, dir in enumerate(data2plot_dirs_list):
+                opt_dir = data2plot_dir + '/' + dir + '/tester'
+                opt_file = os.path.join(opt_dir,
+                                        [file_name for file_name in os.listdir(opt_dir) if
+                                         file_name.startswith('events')][0])
+                opt_summarys = tf.data.TFRecordDataset([opt_file])
+                data_in_one_run_of_one_alg = {key: [] for key in tag2plot}
+                data_in_one_run_of_one_alg.update({'iteration': []})
+                for opt_summary in opt_summarys:
+                    event = event_pb2.Event.FromString(opt_summary.numpy())
+                    for v in event.summary.value:
+                        t = tf.make_ndarray(v.tensor)
+                        for tag in tag2plot:
+                            if tag in v.tag:
+                                data_in_one_run_of_one_alg[tag].append(float(t))
+                                data_in_one_run_of_one_alg['iteration'].append(int(event.step))
+                len1, len2 = len(data_in_one_run_of_one_alg['iteration']), len(data_in_one_run_of_one_alg[tag2plot[0]])
+                period = int(len1 / len2)
+                data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i * period] / 10000. for
+                                                           i in range(len2)]
+                if fname is not None:
+                    data_in_one_run_of_one_alg = {key: val[0::5] for key, val in data_in_one_run_of_one_alg.items()}
+                    WINDOWSIZE = 5
+                else:
+                    data_in_one_run_of_one_alg = {key: val[:] for key, val in data_in_one_run_of_one_alg.items()}
+                    WINDOWSIZE = 1
+                data_in_one_run_of_one_alg.update(dict(algorithm=alg, task=task, num_run=num_run))
+                df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
+                for tag in tag2plot:
+                    df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
+                df_list.append(df_in_one_run_of_one_alg)
     total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
-    figsize = (20, 8)
-    axes_size = [0.06, 0.12, 0.94, 0.88]
+    figsize = (12, 8)
     fontsize = 25
-    f1 = plt.figure(1, figsize=figsize)
-    ax1 = f1.add_axes(axes_size)
-    sns.lineplot(x="goal_perf", y="first_arrive_steps", hue="algorithm", data=total_dataframe, linewidth=2,
-                 palette=palette, legend=False)
-    ax1.set_ylabel('Iterations required [x10000]', fontsize=fontsize)
-    ax1.set_xlabel("Goal performance", fontsize=fontsize)
-    handles, labels = ax1.get_legend_handles_labels()
-    labels = lbs
-    ax1.legend(handles=handles, labels=labels, loc='upper left', frameon=False, fontsize=11)
-    ax1.set_xticklabels([str(goal) for goal in goal_perf_list])
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
-    print(result2print)
-    plt.show()
+
+    if fname is not None:
+        f2 = plt.figure(1, figsize=figsize)
+        f2.add_axes([0.13, 0.12, 0.86, 0.87])
+        ax2 = sns.boxplot(x="iteration", y="evaluation/episode_return", hue="task",
+                     data=total_dataframe, palette=palette,)
+        ax2.xaxis.set_major_locator(MaxNLocator(integer=True))
+        plt.ylim(-10000, 50)
+        handles, labels = ax2.get_legend_handles_labels()
+        labels = lbs
+        ax2.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+        ax2.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax2.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
+        plt.yticks(fontsize=fontsize)
+        plt.xticks(fontsize=fontsize)
+        plt.savefig('./test_mean_std.pdf')
+        plt.show()
+
+    else:
+        f1 = plt.figure(1, figsize=(12, 8))
+        ax1 = f1.add_axes([0.13, 0.12, 0.86, 0.87])
+        sns.lineplot(x="iteration", y="evaluation/episode_return_smo", hue="task",
+                     data=total_dataframe, linewidth=2, palette=palette,)
+        plt.ylim(-4000, 0)
+        handles, labels = ax1.get_legend_handles_labels()
+        labels = lbs
+        ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+        ax1.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax1.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
+        plt.yticks(fontsize=fontsize)
+        plt.xticks(fontsize=fontsize)
+        plt.savefig('./test_total_return.pdf')
+        plt.close(f1)
+
+        f2 = plt.figure(1, figsize=(16, 8))
+        ax2 = f2.add_axes([0.13, 0.12, 0.72, 0.87])
+        legend_list = []
+        for seed, df in enumerate(df_list):
+            if df['task'][0] == 'adv_noise':
+                ax2.plot(df['iteration'], df["evaluation/episode_return_smo"], linewidth=2)
+                legend_list.append('seed' + " " + str(seed))
+        plt.ylim(-10000, 0)
+        handles, labels = ax1.get_legend_handles_labels()
+        # ax2.legend(handles=handles, labels=legend_list, loc='upper right', frameon=False, fontsize=fontsize)
+        ax2.legend(legend_list, fontsize=20, frameon=False, loc=(1.0, 0.2))
+        ax2.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax2.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
+        plt.yticks(fontsize=fontsize)
+        plt.xticks(fontsize=fontsize)
+        plt.savefig('./rarl_every_return.pdf')
+        plt.show()
+
+        f3 = plt.figure(1, figsize=(16, 8))
+        ax3 = f3.add_axes([0.13, 0.12, 0.72, 0.87])
+        for df in df_list:
+            if df['task'][0] == 'adv_noise_smooth':
+                sns.lineplot(x=df['iteration'], y=df["evaluation/episode_return_smo"], linewidth=2, palette=palette, ax=ax3)
+        plt.ylim(-8000, 0)
+        handles, labels = ax1.get_legend_handles_labels()
+        # ax3.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+        ax3.set_ylabel('Total Average Return', fontsize=fontsize)
+        ax3.set_xlabel(r"Iteration$[\times 10^4]$", fontsize=fontsize)
+        plt.yticks(fontsize=fontsize)
+        plt.xticks(fontsize=fontsize)
+        plt.savefig('./saac_every_return.pdf')
+        plt.show()
 
 
-def plot_opt_results_of_all_alg_n_runs(env, dirs_dict_for_plot=None):
-    _, alg_list, lbs, palette, _, _ = help_func(env)
-    dir_str = './results/{}/time'
-    tag2plot = ['pg_time']  # 'update_time' 'pg_time']
-    df_list = []
-    for alg in alg_list:
-        data2plot_dir = dir_str.format(alg)
-        data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
-        for num_run, dir in enumerate(data2plot_dirs_list):
-            opt_dir = data2plot_dir + '/' + dir + '/logs/optimizer'
-            opt_file = os.path.join(opt_dir,
-                                     [file_name for file_name in os.listdir(opt_dir) if
-                                      file_name.startswith('events')][0])
-            opt_summarys = tf.data.TFRecordDataset([opt_file])
-            data_in_one_run_of_one_alg = {key: [] for key in tag2plot}
-            data_in_one_run_of_one_alg.update({'iteration': []})
-            for opt_summary in opt_summarys:
-                event = event_pb2.Event.FromString(opt_summary.numpy())
-                for v in event.summary.value:
-                    t = tf.make_ndarray(v.tensor)
-                    for tag in tag2plot:
-                        if tag in v.tag:
-                            data_in_one_run_of_one_alg[tag].append(1000*float(t))# if float(t)<0.004 else 1.5)
-                            data_in_one_run_of_one_alg['iteration'].append(int(event.step))
-            len1, len2 = len(data_in_one_run_of_one_alg['iteration']), len(data_in_one_run_of_one_alg[tag2plot[0]])
-            period = int(len1 / len2)
-            data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i * period] / 10000. for
-                                                       i in range(len2)]
-
-            data_in_one_run_of_one_alg = {key: val[200:] for key, val in data_in_one_run_of_one_alg.items()}
-            data_in_one_run_of_one_alg.update(dict(algorithm=alg, num_run=num_run))
-            df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
-            df_list.append(df_in_one_run_of_one_alg)
-    total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
-    figsize = (20, 8)
-    axes_size = [0.11, 0.12, 0.89, 0.88]
-    fontsize = 25
-    f1 = plt.figure(1, figsize=figsize)
-    ax1 = f1.add_axes(axes_size)
-    sns.boxplot(x="algorithm", y=tag2plot[0], data=total_dataframe, palette=palette)
-    sns.despine(offset=10, trim=True)
-    TAG2LBS = {'pg_time': 'Wall-clock Time per Gradient [ms]',
-               'update_time': 'Wall-clock Time per Update [ms]'}
-    ax1.set_ylabel(TAG2LBS[tag2plot[0]], fontsize=fontsize)
-    labels = lbs
-    ax1.set_xticklabels(labels, fontsize=fontsize)
-    ax1.set_xlabel("", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize, rotation=10)
-    plt.show()
-
-
-def calculate_fair_case_path_tracking():
-    delta_u, delta_y, delta_phi, r, delta, acc = 2, 1, 10*np.pi/180, 0.2, 0.1, 0.5
-    r = -0.01*delta_u**2-0.04*delta_y**2-0.1*delta_phi**2-0.02*r**2-5*delta**2-0.05*acc**2
-    print(200*r)
-
-
-def calculate_fair_case_inverted():
-    x, theta, x_dot, theta_dot = 1., 0.1, 0.1, 0.05
-    r = -0.01*x**2-theta**2-0.1*x_dot**2-0.1*theta_dot**2
-    print(100*r)
+def main(dirs_dict_for_plot=None):
+    env_list = ['NADP']
+    task_list = ['no_noise', 'adv_noise', 'adv_noise_smooth']   # 'adv_noise', 'adv_noise_smooth'
+    dir_str = './results/{}/{}'
+    for alg in env_list:
+        for task in task_list:
+            data2plot_dir = dir_str.format(alg, task)
+            data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
+            for num_run, dir in enumerate(data2plot_dirs_list):
+                parser = argparse.ArgumentParser()
+                parser.add_argument('--adv_env_id', default='CrossroadEnd2endAdvTest-v0')
+                test_dir = data2plot_dir + '/' + dir
+                print('current policy:', test_dir)
+                params = json.loads(open(test_dir + '/config.json').read())
+                time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+                test_log_dir = test_dir + '/tester'
+                params.update(dict(test_dir=test_dir,
+                                   test_iter_list=None,
+                                   test_log_dir=test_log_dir,
+                                   num_eval_episode=5,
+                                   eval_log_interval=1,
+                                   fixed_steps=200,
+                                   eval_render=False,
+                                   ))
+                for key, val in params.items():
+                    parser.add_argument("-" + key, default=val)
+                args = parser.parse_args()
+                args.mode = 'testing'
+                args.test_iter_list = list(range(0, args.max_iter, args.save_interval))
+                tester = Tester(policy_cls=NAME2POLICIES[args.policy_type],
+                                evaluator_cls=NAME2EVALUATORS[args.evaluator_type],
+                                args=args)
+                tester.test()
 
 
 if __name__ == "__main__":
-    env = 'inverted_pendulum_env'  # inverted_pendulum_env path_tracking_env
-    plot_eval_results_of_all_alg_n_runs(env)
-    # plot_opt_results_of_all_alg_n_runs(env)
-    # print(compute_convergence_speed(-100.))
-    # plot_convergence_speed_for_different_goal_perf(env)
-    # calculate_fair_case_path_tracking()
-    # calculate_fair_case_inverted()
+    # main()
+    # plot_opt_results_of_all_alg_n_runs()
+    plot_eval_results_of_all_alg_n_runs()
+    # print(compute_convergence_speed(-5.))
+    # plot_trained_results_of_all_alg_n_runs(fname=None)

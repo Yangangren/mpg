@@ -34,7 +34,8 @@ class Evaluator(object):
         self.args = args
         kwargs = copy.deepcopy(vars(self.args))
         if self.args.env_id == 'PathTracking-v0':
-            self.env = PathTrackingEnv(num_agent=self.args.num_eval_agent, num_future_data=self.args.num_future_data)
+            self.args.num_agent = self.args.num_eval_agent
+            self.env = PathTrackingEnv(**vars(self.args))
         else:
             env = gym.make(self.args.env_id)
             self.env = DummyVecEnv(env)
@@ -226,9 +227,9 @@ class Evaluator(object):
                 n_metrics_list, mean_metric_dict = self.run_n_episodes_parallel(self.args.num_eval_episode)
             with self.writer.as_default():
                 for key, val in mean_metric_dict.items():
-                    self.tf.summary.scalar("evaluation/{}".format(key), val, step=self.iteration)
+                    self.tf.summary.scalar("evaluation/{}".format(key), val, step=iteration)
                 for key, val in self.get_stats().items():
-                    self.tf.summary.scalar("evaluation/{}".format(key), val, step=self.iteration)
+                    self.tf.summary.scalar("evaluation/{}".format(key), val, step=iteration)
                 self.writer.flush()
             np.save(self.log_dir + '/n_metrics_list_ite{}.npy'.format(iteration), np.array(n_metrics_list))
         if self.eval_times % self.args.eval_log_interval == 0:
