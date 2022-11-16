@@ -195,8 +195,8 @@ class VehicleDynamics(object):
             punish_steer = -tf.square(steers)
             punish_a_x = -tf.square(a_xs)
 
-            rewards = 0.01 * devi_v + 0.04 * devi_y + 0.1 * devi_phi + 0.02 * punish_yaw_rate + \
-                      5 * punish_steer + 0.05 * punish_a_x
+            rewards = 0.01 * devi_v + 0.08 * devi_y + 0.1 * devi_phi + 0.02 * punish_yaw_rate + \
+                      5 * punish_steer + 0.01 * punish_a_x
 
         return rewards
 
@@ -378,8 +378,8 @@ class PathTrackingEnv(gym.Env, ABC):
         self.num_agent = num_agent
         self.expected_vs = 20.
         self.done = np.zeros((self.num_agent,), dtype=np.int)
-        self.base_frequency = 200
-        self.interval_times = 20
+        self.base_frequency = 10.
+        self.interval_times = 1
         self.observation_space = gym.spaces.Box(
             low=np.array([-np.inf] * (6 + self.num_future_data)),
             high=np.array([np.inf] * (6 + self.num_future_data)),

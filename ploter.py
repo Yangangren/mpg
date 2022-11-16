@@ -239,6 +239,111 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         print(result2conv)
 
 
+def plot_robust_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
+    WINDOWSIZE = 5
+    tag2plot = ['evaluation/episode_return', 'evaluation/delta_y_mse', 'evaluation/delta_phi_mse', 'evaluation/delta_v_mse']
+    env_list = ['robust test']
+    task_list = ['no_noise', 'adv_noise_smooth']
+    palette = "bright"
+    lbs = ['ADP', 'SaAC']
+    dir_str = './results/{}/{}'
+    df_list = []
+    for alg in env_list:
+        for task in task_list:
+            data2plot_dir = dir_str.format(alg, task)
+            data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
+            for num_run, dir in enumerate(data2plot_dirs_list):
+                opt_dir = data2plot_dir + '/' + dir + '/logs/tester'
+                for iter_run, file in enumerate(os.listdir(opt_dir)):
+                    final_file = opt_dir + '/' + file
+                    opt_file = os.path.join(final_file,
+                                            [file_name for file_name in os.listdir(final_file) if
+                                             file_name.startswith('events')][0])
+                    opt_summarys = tf.data.TFRecordDataset([opt_file])
+                    data_in_one_run_of_one_alg = {key: [] for key in tag2plot}
+                    data_in_one_run_of_one_alg.update({'iteration': []})
+                    for opt_summary in opt_summarys:
+                        event = event_pb2.Event.FromString(opt_summary.numpy())
+                        for v in event.summary.value:
+                            t = tf.make_ndarray(v.tensor)
+                            for tag in tag2plot:
+                                if tag in v.tag:
+                                    data_in_one_run_of_one_alg[tag].append(float(t))
+                                    data_in_one_run_of_one_alg['iteration'].append(int(event.step))
+                    len1, len2 = len(data_in_one_run_of_one_alg['iteration']), len(data_in_one_run_of_one_alg[tag2plot[0]])
+                    period = int(len1 / len2)
+                    data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i * period] for
+                                                               i in range(len2)]
+                    data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i]* 0.06 - 0.3 for i in range(len(data_in_one_run_of_one_alg['iteration']))]
+                    data_in_one_run_of_one_alg = {key: val[:] for key, val in data_in_one_run_of_one_alg.items()}
+                    data_in_one_run_of_one_alg.update(dict(algorithm=alg, task=task, num_run=num_run, iter_run=iter_run))
+                    df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
+                    for tag in tag2plot:
+                        df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
+                    df_list.append(df_in_one_run_of_one_alg)
+    total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
+    fontsize = 25
+
+    f1 = plt.figure(1, figsize=(12, 8))
+    ax1 = f1.add_axes([0.115, 0.12, 0.86, 0.86])
+    sns.lineplot(x="iteration", y="evaluation/episode_return_smo", hue="task",
+                 data=total_dataframe, linewidth=2, palette=palette, ci=90)
+    # plt.ylim(-500, 0)
+    plt.xlim(-0.3, 0.3)
+    handles, labels = ax1.get_legend_handles_labels()
+    labels = lbs
+    ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
+    ax1.set_ylabel('Total Average Return', fontsize=fontsize)
+    ax1.set_xlabel(r"Lateral Disturbance [m/s]", fontsize=fontsize)
+    plt.yticks(fontsize=fontsize)
+    plt.xticks(fontsize=fontsize)
+    plt.savefig('./results/robust test/robust_test_return.pdf')
+
+    f4 = plt.figure(4, figsize=(16, 8))
+    ax4 = f4.add_axes([0.08, 0.11, 0.89, 0.87])
+    sns.lineplot(x="iteration", y="evaluation/delta_y_mse_smo", hue="task",
+                 data=total_dataframe, linewidth=2, palette=palette)
+    ax4.set_ylabel('Position Error [m]', fontsize=fontsize)
+    ax4.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+    handles, labels = ax4.get_legend_handles_labels()
+    labels = lbs
+    ax4.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
+    # plt.xlim(0., 10)
+    # plt.ylim(0., 25)
+    plt.yticks(fontsize=fontsize)
+    plt.xticks(fontsize=fontsize)
+    plt.savefig('./results/robust test/robust_test_position_error.pdf')
+
+    f5 = plt.figure(5, figsize=(16, 8))
+    ax5 = f5.add_axes([0.07, 0.11, 0.90, 0.87])
+    sns.lineplot(x="iteration", y="evaluation/delta_v_mse_smo", hue="task",
+                 data=total_dataframe, linewidth=2, palette=palette, legend=False)
+    ax5.set_ylabel('Velocity Error [m/s]', fontsize=fontsize)
+    ax5.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+    # handles, labels = ax5.get_legend_handles_labels()
+    # ax5.legend(handles=handles[0:], labels=labels[0:])
+    # plt.xlim(0., 10)
+    # plt.ylim(0., 40)
+    plt.yticks(fontsize=fontsize)
+    plt.xticks(fontsize=fontsize)
+    plt.savefig('./results/robust test/robust_test_velocity_error.pdf')
+
+    f6 = plt.figure(6, figsize=(16, 8))
+    ax6 = f6.add_axes([0.09, 0.11, 0.89, 0.87])
+    sns.lineplot(x="iteration", y="evaluation/delta_phi_mse_smo", hue="task",
+                 data=total_dataframe, linewidth=2, palette=palette, legend=False)
+    ax6.set_ylabel('Heading Angle Error [rad]', fontsize=fontsize)
+    ax6.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+    handles, labels = ax6.get_legend_handles_labels()
+    labels = lbs
+    # ax6.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
+    # plt.xlim(0., 10)
+    # plt.ylim(0., 10)
+    plt.yticks(fontsize=fontsize)
+    plt.xticks(fontsize=fontsize)
+    plt.savefig('./results/robust test/robust_test_heading_error.pdf')
+
+
 def compute_convergence_speed(goal_perf, dirs_dict_for_plot=None):
     _, alg_list, _, _, _, dir_str = help_func()
     result_dict = {}
@@ -428,6 +533,7 @@ def main(dirs_dict_for_plot=None):
 if __name__ == "__main__":
     # main()
     # plot_opt_results_of_all_alg_n_runs()
-    plot_eval_results_of_all_alg_n_runs()
+    # plot_eval_results_of_all_alg_n_runs()
+    plot_robust_results_of_all_alg_n_runs()
     # print(compute_convergence_speed(-5.))
     # plot_trained_results_of_all_alg_n_runs(fname=None)
