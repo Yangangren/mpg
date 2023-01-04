@@ -73,11 +73,11 @@ def built_NADP_parser():
     parser.add_argument('--rho', type=float, default=20)
 
     if mode == 'testing':
-        test_dir = '../results/NADP/{}/experiment-2020-09-23-20-52-24'.format(noise_mode)
+        test_dir = '../results/NADP-Dec/{}/experiment-2022-12-02-19-36-45'.format(noise_mode)
         params = json.loads(open(test_dir + '/config.json').read())
         time_now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         test_log_dir = params['log_dir'] + '/tester/test-{}'.format(time_now)
-        disturb_env = [-0.174 + i * 0.0348 for i in range(11)]
+        disturb_env = [-5.0 + i * 1 for i in range(11)]
         params.update(dict(test_dir=test_dir,
                            disturb_env=disturb_env,
                            test_iter_list=[99000] * len(disturb_env),

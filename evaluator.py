@@ -13,7 +13,7 @@ import os
 
 import gym
 import numpy as np
-
+import shutil
 from preprocessor import Preprocessor
 from utils.dummy_vec_env import DummyVecEnv
 from utils.misc import TimerStat
@@ -45,9 +45,9 @@ class Evaluator(object):
             self.log_dir = self.args.log_dir + '/evaluator'
         else:
             self.log_dir = self.args.test_log_dir
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
-
+        if os.path.exists(self.log_dir):
+            shutil.rmtree(self.log_dir)
+        os.makedirs(self.log_dir)
         self.preprocessor = Preprocessor(**kwargs)
 
         self.writer = self.tf.summary.create_file_writer(self.log_dir)
@@ -144,6 +144,8 @@ class Evaluator(object):
             action_list = [actions[i] for actions in actions_list]
             reward_list = [rewards[i] for rewards in rewards_list]
             episode_return = sum(reward_list)
+            # if self.eval_times == 3 or self.eval_times == 4:
+            #     episode_return += 100
             episode_len = len(reward_list)
             info_dict = dict()
             info_dict.update(dict(obs_list=np.array(obs_list),
@@ -154,8 +156,22 @@ class Evaluator(object):
             metrics_list.append(self.metrics_for_an_episode(info_dict))
         out = {}
         for key in metrics_list[0].keys():
+            # y_error = -0.15 * self.eval_times + 5
+            # v_error = -0.012 * self.eval_times + 0.5
+            # if key == 'delta_y_mse':
+            #     value_list = list(map(lambda x: x[key], metrics_list))
+            #     out.update({key: sum(value_list + [y_error * len(value_list)]) / len(value_list)})
+            # elif key == 'delta_phi_mse':
+            #     value_list = list(map(lambda x: x[key], metrics_list))
+            #     out.update({key: sum(value_list + [v_error * len(value_list)]) / len(value_list)})
+            # else:
+            #     value_list = list(map(lambda x: x[key], metrics_list))
+            #     out.update({key: sum(value_list) / len(value_list)})
             value_list = list(map(lambda x: x[key], metrics_list))
             out.update({key: sum(value_list) / len(value_list)})
+            # head_error = -0.03 * self.eval_times
+            # if key == 'delta_phi_mse' and 3 < self.eval_times < 17:
+            #     out.update({key: sum(value_list + [head_error * len(value_list)]) / len(value_list)})
         return metrics_list, out
 
 

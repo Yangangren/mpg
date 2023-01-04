@@ -24,10 +24,23 @@ from evaluator import Evaluator
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import MultipleLocator
 from matplotlib.ticker import MaxNLocator
-
+import matplotlib.font_manager as fm
+zhfont1=fm.FontProperties(fname='/home/guanyang/simsun.ttf', size=14)
+enfont1=fm.FontProperties(fname='/home/guanyang/Times New Roman.ttf', size=20)
+# plt.rc('font', family='Times New Roman')
+plt.rcParams['mathtext.fontset'] = 'stix'
+# plt.rcParams['axes.unicode_minus'] = False
 # plt.rcParams['font.family'] = 'serif'
 # plt.rcParams[u'font.sans-serif'] = ['SIMSUN']
 # plt.rcParams['axes.unicode_minus'] = False
+
+# config = {
+#     "font.family":'serif',
+#     "font.size": 18,
+#     "mathtext.fontset":'stix',
+#     "font.serif": ['SimSun'],
+# }
+# plt.rcParams.update(config)
 
 NAME2POLICIES = dict([('PolicyWithQs', PolicyWithQs)])
 NAME2EVALUATORS = dict([('Evaluator', Evaluator)])
@@ -58,10 +71,10 @@ def help_func():
 
 def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
     tag2plot = ['evaluation/episode_return', 'evaluation/delta_y_mse', 'evaluation/delta_phi_mse', 'evaluation/delta_v_mse']
-    env_list = ['NADP']
+    env_list = ['error_plot']
     task_list = ['no_noise', 'adv_noise', 'adv_noise_smooth', 'adv_noise_smooth_uniform', 'aaac']
     palette = "bright"
-    lbs = ['ADP', 'RARL', 'SAAC', 'SAAC-u', 'AAAC']
+    lbs = ['ADP', 'RARL', 'SAAC', 'SAAC-u', 'RPG']
     dir_str = './results/{}/{}'
     df_list = []
     for alg in env_list:
@@ -113,10 +126,10 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         handles, labels = ax2.get_legend_handles_labels()
         labels = lbs
         ax2.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
-        ax2.set_ylabel('Total Average Return', fontsize=fontsize)
-        ax2.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
+        ax2.set_ylabel('平均累计收益', fontsize=fontsize)
+        ax2.set_xlabel(r"迭代次数$[\times 10^4]$", fontsize=fontsize)
+        # plt.yticks(fontsize=fontsize-2)
+        # plt.xticks(fontsize=fontsize-2)
         plt.savefig('./results/tar_plot/test_mean_std.pdf')
         plt.show()
 
@@ -129,11 +142,11 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         plt.xlim(0, 10.)
         handles, labels = ax1.get_legend_handles_labels()
         labels = lbs
-        ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
-        ax1.set_ylabel('Total Average Return', fontsize=fontsize)
-        ax1.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
+        ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize + 6, prop=enfont1)
+        ax1.set_ylabel('平均累计收益', fontproperties=zhfont1, fontsize=fontsize)
+        ax1.set_xlabel(r"迭代次数$[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
+        plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
+        plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
         plt.savefig('./results/tar_plot/test_total_return.pdf')
         plt.close(f1)
 
@@ -149,9 +162,9 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         # ax2.legend(handles=handles, labels=legend_list, loc='upper right', frameon=False, fontsize=fontsize)
         ax2.legend(legend_list, fontsize=20, frameon=False, loc=(1.0, 0.2))
         ax2.set_ylabel('Total Average Return', fontsize=fontsize)
-        ax2.set_xlabel(r"Iteration $[\times 10^4]$", fontsize=fontsize)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
+        ax2.set_xlabel(r"迭代次数$[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
+        plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
+        plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
         plt.savefig('./results/tar_plot/rarl_every_return.pdf')
         plt.close(f2)
 
@@ -170,48 +183,48 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         plt.savefig('./results/tar_plot/saac_every_return.pdf')
         plt.close(f3)
 
-        f4 = plt.figure(4, figsize=(16, 8))
-        ax4 = f4.add_axes([0.07, 0.11, 0.90, 0.87])
+        f4 = plt.figure(4, figsize=(10, 8))
+        ax4 = f4.add_axes([0.085, 0.11, 0.90, 0.87])
         sns.lineplot(x="iteration", y="evaluation/delta_y_mse_smo", hue="task",
                      data=total_dataframe, linewidth=2, palette=palette)
-        ax4.set_ylabel('Position Error [m]', fontsize=fontsize)
-        ax4.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+        ax4.set_xlabel(r"迭代次数$[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
+        ax4.set_ylabel(r"位置误差$[\rm m]$", fontproperties=zhfont1, fontsize=fontsize)
+        plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
+        plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
         handles, labels = ax4.get_legend_handles_labels()
         labels = lbs
-        ax4.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
+        ax4.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize + 6, prop=enfont1)
         plt.xlim(0., 10)
         plt.ylim(0., 25)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
         plt.savefig('./results/tar_plot/position_error.pdf')
 
-        f5 = plt.figure(5, figsize=(16, 8))
-        ax5 = f5.add_axes([0.07, 0.11, 0.90, 0.87])
+        f5 = plt.figure(5, figsize=(10, 8))
+        ax5 = f5.add_axes([0.085, 0.11, 0.90, 0.87])
         sns.lineplot(x="iteration", y="evaluation/delta_v_mse_smo", hue="task",
                      data=total_dataframe, linewidth=2, palette=palette, legend=False)
-        ax5.set_ylabel('Velocity Error [m/s]', fontsize=fontsize)
-        ax5.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+        ax5.set_xlabel(r"迭代次数$[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
+        ax5.set_ylabel(r"速度误差$[\rm m/s]$", fontproperties=zhfont1, fontsize=fontsize)
         # handles, labels = ax5.get_legend_handles_labels()
         # ax5.legend(handles=handles[0:], labels=labels[0:])
         plt.xlim(0., 10)
         # plt.ylim(0., 40)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
+        plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
+        plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
         plt.savefig('./results/tar_plot/velocity_error.pdf')
 
-        f6 = plt.figure(6, figsize=(16, 8))
-        ax6 = f6.add_axes([0.09, 0.11, 0.89, 0.87])
+        f6 = plt.figure(6, figsize=(10, 8))
+        ax6 = f6.add_axes([0.091, 0.11, 0.89, 0.87])
         sns.lineplot(x="iteration", y="evaluation/delta_phi_mse_smo", hue="task",
                      data=total_dataframe, linewidth=2, palette=palette, legend=False)
-        ax6.set_ylabel('Heading Angle Error [rad]', fontsize=fontsize)
-        ax6.set_xlabel("Iteration [x10000]", fontsize=fontsize)
+        ax6.set_xlabel(r"迭代次数$[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
+        ax6.set_ylabel(r'航向角误差$[\rm rad]$', fontproperties=zhfont1, fontsize=fontsize)
         handles, labels = ax6.get_legend_handles_labels()
         labels = lbs
         # ax6.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
         plt.xlim(0., 10)
         # plt.ylim(0., 10)
-        plt.yticks(fontsize=fontsize)
-        plt.xticks(fontsize=fontsize)
+        plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
+        plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
         plt.savefig('./results/tar_plot/heading_error.pdf')
 
         allresults = {}
@@ -285,18 +298,18 @@ def plot_robust_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     fontsize = 25
 
     f1 = plt.figure(1, figsize=(12, 8))
-    ax1 = f1.add_axes([0.135, 0.12, 0.84, 0.86])
+    ax1 = f1.add_axes([0.115, 0.12, 0.86, 0.86])
     sns.lineplot(x="iteration", y="evaluation/episode_return_smo", hue="task",
                  data=total_dataframe, linewidth=2, palette=palette, ci=90)
     # plt.ylim(-500, 0)
     plt.xlim(-0.3, 0.3)
     handles, labels = ax1.get_legend_handles_labels()
     labels = lbs
-    ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize)
-    ax1.set_ylabel('Total Average Return', fontsize=fontsize)
-    ax1.set_xlabel(r"Lateral Disturbance [m/s]", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
+    ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize, prop=enfont1)
+    plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
+    plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
+    ax1.set_xlabel(r"横向速度干扰$[\rm m/s]$", fontproperties=zhfont1, fontsize=fontsize)
+    ax1.set_ylabel('平均累计收益', fontproperties=zhfont1, fontsize=fontsize)
     plt.savefig('./results/robust test/robust_test_return.pdf')
 
     f4 = plt.figure(4, figsize=(16, 8))
@@ -535,7 +548,7 @@ def main(dirs_dict_for_plot=None):
 if __name__ == "__main__":
     # main()
     # plot_opt_results_of_all_alg_n_runs()
-    plot_eval_results_of_all_alg_n_runs()
+    # plot_eval_results_of_all_alg_n_runs()
     plot_robust_results_of_all_alg_n_runs()
     # print(compute_convergence_speed(-5.))
     # plot_trained_results_of_all_alg_n_runs(fname=None)

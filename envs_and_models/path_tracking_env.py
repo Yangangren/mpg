@@ -75,7 +75,7 @@ class VehicleDynamics(object):
         self.expected_vs = 20.
         self.path = ReferencePath()
 
-    def f_xu(self, states, actions, adv_actions, tau, env_disturb):  # states and actions are tensors, [[], [], ...]
+    def f_xu(self, states, actions, adv_actions, tau):  # states and actions are tensors, [[], [], ...]
         # veh_state = obs: v_xs, v_ys, rs, delta_ys, xs
         # obs: v_xs, v_ys, rs, delta_ys, delta_phis, xs, future_delta_ys1,..., future_delta_ysn,
         #      future_delta_phis1,..., future_delta_phisn
@@ -122,11 +122,10 @@ class VehicleDynamics(object):
                           x + tau * (v_x * tf.cos(delta_phi) - v_y * tf.sin(delta_phi)),
                           ]
         else:
-            env_disturb = env_disturb if env_disturb is not None else tfd.Uniform(low=-0.05 * tf.ones_like(v_x), high=0.05 * tf.ones_like(v_x)).sample(),
             next_state = [v_x + tau * (a_x + v_y * r),
                           (mass * v_y * v_x + tau * (
                                       a * C_f - b * C_r) * r - tau * C_f * steer * v_x - tau * mass * tf.square(
-                              v_x) * r) / (mass * v_x - tau * (C_f + C_r)) + env_disturb,
+                              v_x) * r) / (mass * v_x - tau * (C_f + C_r)),
                           (-I_z * r * v_x - tau * (a * C_f - b * C_r) * v_y + tau * a * C_f * steer * v_x) / (
                                       tau * (tf.square(a) * C_f + tf.square(b) * C_r) - I_z * v_x),
                           delta_y + tau * (v_x * tf.sin(delta_phi) + v_y * tf.cos(delta_phi)),
@@ -139,17 +138,17 @@ class VehicleDynamics(object):
         return tf.stack(next_state, 1),\
                tf.stack([alpha_f, alpha_r, next_state[2], alpha_f_bounds, alpha_r_bounds, r_bounds], 1)
 
-    def prediction(self, x_1, u_1, u_2, frequency, env_disturb=None):
-        x_next, next_params = self.f_xu(x_1, u_1, u_2, 1 / frequency, env_disturb)
+    def prediction(self, x_1, u_1, u_2, frequency):
+        x_next, next_params = self.f_xu(x_1, u_1, u_2, 1 / frequency)
         return x_next, next_params
 
-    def simulation(self, states, full_states, actions, env_disturb, base_freq, simu_times):
+    def simulation(self, states, full_states, actions, base_freq, simu_times):
         # veh_state = obs: v_xs, v_ys, rs, delta_ys, delta_phis, xs
         # veh_full_state: v_xs, v_ys, rs, ys, phis, xs
         # others: alpha_f, alpha_r, r, alpha_f_bounds, alpha_r_bounds, r_bounds
         for i in range(simu_times):
             states = tf.convert_to_tensor(states.copy(), dtype=tf.float32)
-            states, others = self.prediction(states, actions, None, base_freq, env_disturb)
+            states, others = self.prediction(states, actions, None, base_freq)
             states = states.numpy()
             others = others.numpy()
             states[:, 0] = np.clip(states[:, 0], 1, 35)
@@ -420,7 +419,8 @@ class PathTrackingEnv(gym.Env, ABC):
 
     def reset(self, **kwargs):
         self.epi_len += 1
-        print("*****************{}*{}******************".format(self.epi_len, self.env_disturb[self.epi_len]))
+        if self.env_disturb:
+            print("*****************{}*{}******************".format(self.epi_len, self.env_disturb[self.epi_len]))
         if 'init_obs' in kwargs.keys():
             self.obs = kwargs.get('init_obs')
             self.veh_state = self._get_state(self.obs)
@@ -439,6 +439,9 @@ class PathTrackingEnv(gym.Env, ABC):
         init_x = np.random.uniform(0, 600, (self.num_agent,)).astype(np.float32)
 
         init_delta_y = np.random.normal(0, 1, (self.num_agent,)).astype(np.float32)
+        # if self.mode == 'testing':
+        #     # init_delta_y = np.array([self.env_disturb[self.epi_len]] * self.num_agent).astype(np.float32)
+        #     init_delta_y = np.random.normal(4, 6, (self.num_agent,)).astype(np.float32)
         init_y = self.vehicle_dynamics.path.compute_y(init_x, init_delta_y)
 
         init_delta_phi = np.random.normal(0, np.pi / 9, (self.num_agent,)).astype(np.float32)
@@ -476,7 +479,7 @@ class PathTrackingEnv(gym.Env, ABC):
         action_tensor = tf.convert_to_tensor(self.action, dtype=tf.float32)
         reward = self.vehicle_dynamics.compute_rewards(veh_state_tensor, action_tensor).numpy()
         self.veh_state, self.veh_full_state, stability_related = \
-            self.vehicle_dynamics.simulation(self.veh_state, self.veh_full_state, self.action, self.env_disturb[self.epi_len],
+            self.vehicle_dynamics.simulation(self.veh_state, self.veh_full_state, self.action,
                                              base_freq=self.base_frequency, simu_times=self.interval_times)
         self.history_positions.append((self.veh_full_state[0, -1], self.veh_full_state[0, 3]))
         self.done = self.judge_done(self.veh_state, stability_related)
