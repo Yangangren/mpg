@@ -29,6 +29,7 @@ from policy import PolicyWithQs
 from tester import Tester
 from trainer import Trainer
 from worker import OffPolicyWorker
+from env_build.endtoend import CrossroadEnd2endMix
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -49,7 +50,7 @@ NAME2OPTIMIZERCLS = dict([('OffPolicyAsync', OffPolicyAsyncOptimizer),
                           ('SingleProcessOffPolicy', SingleProcessOffPolicyOptimizer)])
 NAME2POLICYCLS = dict([('PolicyWithQs', PolicyWithQs)])
 NAME2EVALUATORCLS = dict([('Evaluator', Evaluator), ('None', None)])
-NUM_WORKER = 2
+NUM_WORKER = 10
 NUM_LEARNER = 12
 NUM_BUFFER = 2
 
@@ -685,7 +686,7 @@ def built_SAC_parser():
                            test_iter_list=[100000],
                            test_log_dir=test_log_dir,
                            num_eval_episode=50,
-                           num_eval_agent=50,
+                           num_eval_agent=1,
                            eval_log_interval=1,
                            fixed_steps=200))
         for key, val in params.items():
@@ -701,14 +702,23 @@ def built_SAC_parser():
     parser.add_argument('--off_policy', type=str, default=True)
 
     # env
-    parser.add_argument('--env_id', default='PathTracking-v0')
-    parser.add_argument('--num_agent', type=int, default=8)
-    parser.add_argument('--num_future_data', type=int, default=0)
+    parser.add_argument('--env_id', default='CrossroadEnd2endMix-v0')
+    parser.add_argument('--num_agent', type=int, default=1)
+    parser.add_argument('--max_step', type=int, default=200)
+    parser.add_argument('--state_dim', default=None)
+
+    parser.add_argument('--other_start_dim', type=int, default=None)
+    parser.add_argument('--per_other_dim', type=int, default=None)
+    parser.add_argument('--other_number', type=int, default=None)
+    parser.add_argument('--bike_num', type=int, default=None)
+    parser.add_argument('--ped_num', type=int, default=None)
+    parser.add_argument('--veh_num', type=int, default=None)
 
     # learner
     parser.add_argument('--alg_name', default='SAC')
     parser.add_argument('--gamma', type=float, default=0.98)
     parser.add_argument('--gradient_clip_norm', type=float, default=3)
+    parser.add_argument('--init_punish_factor', type=float, default=20.)
     parser.add_argument('--num_batch_reuse', type=int, default=1)
 
     # worker
@@ -728,9 +738,7 @@ def built_SAC_parser():
     parser.add_argument('--num_eval_episode', type=int, default=5)
     parser.add_argument('--eval_log_interval', type=int, default=1)
     parser.add_argument('--fixed_steps', type=int, default=200)
-    parser.add_argument('--eval_render', type=bool, default=True)
-    num_eval_episode = parser.parse_args().num_eval_episode
-    parser.add_argument('--num_eval_agent', type=int, default=num_eval_episode)
+    parser.add_argument('--eval_render', type=bool, default=False)
 
     # policy and model
     parser.add_argument('--obs_dim', type=int, default=None)
@@ -757,14 +765,13 @@ def built_SAC_parser():
     parser.add_argument('--tau', type=float, default=0.005)
     parser.add_argument('--delay_update', type=int, default=1)
     parser.add_argument('--deterministic_policy', type=bool, default=False)
-    parser.add_argument('--action_range', type=float, default=None)
+    parser.add_argument('--action_range', type=float, default=1.0)            # TODO
 
     # preprocessor
     parser.add_argument('--obs_ptype', type=str, default='scale')
-    num_future_data = parser.parse_args().num_future_data
-    parser.add_argument('--obs_scale', type=list, default=[1., 1., 2., 1., 2.4, 1 / 1200] + [1.] * num_future_data)
     parser.add_argument('--rew_ptype', type=str, default='scale')
-    parser.add_argument('--rew_scale', type=float, default=0.01)
+    parser.add_argument('--obs_scale', type=list, default=None)
+    parser.add_argument('--rew_scale', type=float, default=0.1)
     parser.add_argument('--rew_shift', type=float, default=0.)
 
     # Optimizer (PABAL)
@@ -807,8 +814,22 @@ def built_parser(alg_name):
         args = built_NADP_parser()
     elif alg_name == 'AMPC':
         args = built_AMPC_parser()
-    env = gym.make(args.env_id, **vars(args))
+    env = CrossroadEnd2endMix()
+    args.per_other_dim = env.per_other_info_dim
+    args.other_start_dim = env.other_start_dim
+    args.other_number = env.other_number
+    args.bike_num = env.bike_num
+    args.ped_num = env.person_num
+    args.veh_num = env.veh_num
+    args.attn_in_per_dim = env.per_other_info_dim
+    args.attn_in_total_dim = env.per_other_info_dim * env.other_number
     args.obs_dim, args.act_dim = env.observation_space.shape[0], env.action_space.shape[0]
+    args.obs_scale = [0.2, 1., 2., 1 / 30., 1 / 30, 1 / 180., 1 / 25., 1.] + \
+                     [1., 1., 1 / 15., 0.2] + \
+                     [1 / 30., 1 / 30] + \
+                     [1., 1.] + \
+                     [1., 1., 1.] + \
+                     [1 / 30., 1 / 30., 0.2, 1 / 180., 0.2, 0.5, 1., 1., 1., 0.] * args.other_number
     return args
 
 def main(alg_name):
@@ -845,4 +866,4 @@ def main(alg_name):
 
 
 if __name__ == '__main__':
-    main('NADP')
+    main('SAC')
