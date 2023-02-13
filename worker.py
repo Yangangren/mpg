@@ -14,7 +14,8 @@ import numpy as np
 
 from preprocessor import Preprocessor
 from utils.dummy_vec_env import DummyVecEnv
-from utils.misc import judge_is_nan
+from utils.misc import judge_is_nan, args2envkwargs
+from env_build.endtoend import CrossroadEnd2endMix
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -36,12 +37,14 @@ class OffPolicyWorker(object):
         self.num_agent = self.args.num_agent
         if self.args.env_id == 'PathTracking-v0':
             self.env = gym.make(self.args.env_id, num_agent=self.num_agent, num_future_data=self.args.num_future_data)
+        elif self.args.env_id == 'CrossroadEnd2endMix-v0':
+            self.env = CrossroadEnd2endMix(**args2envkwargs(args))
         else:
             env = gym.make(self.args.env_id)
             self.env = DummyVecEnv(env)
         self.policy_with_value = policy_cls(**vars(self.args))
         self.batch_size = self.args.batch_size
-        self.obs = self.env.reset()
+        self.obs, self.info = self.env.reset()
         self.done = False
         self.preprocessor = Preprocessor(**vars(self.args))
 
@@ -90,10 +93,10 @@ class OffPolicyWorker(object):
 
     def sample(self):
         batch_data = []
-        for _ in range(int(self.batch_size/self.num_agent)):
+        for _ in range(int(self.batch_size)):
             processed_obs = self.preprocessor.process_obs(self.obs)
             judge_is_nan([processed_obs])
-            action, logp = self.policy_with_value.compute_action(self.tf.constant(processed_obs))
+            action, logp = self.policy_with_value.compute_action(self.tf.constant(processed_obs[np.newaxis, :]))
             if self.explore_sigma is not None:
                 action += np.random.normal(0, self.explore_sigma, np.shape(action))
             try:
@@ -105,11 +108,11 @@ class OffPolicyWorker(object):
                 action, logp = self.policy_with_value.compute_action(processed_obs)
                 judge_is_nan([action])
                 raise ValueError
-            obs_tp1, reward, self.done, info = self.env.step(action.numpy())
+            obs_tp1, reward, self.done, info = self.env.step(action.numpy()[0])
             processed_rew = self.preprocessor.process_rew(reward, self.done)
-            for i in range(self.num_agent):
-                batch_data.append((self.obs[i].copy(), action[i].numpy(), reward[i], obs_tp1[i].copy(), self.done[i]))
-            self.obs = self.env.reset()
+
+            batch_data.append((self.obs.copy(), action.numpy()[0], reward, obs_tp1.copy(), self.done))
+            self.obs, self.info = self.env.reset()
 
         if self.worker_id == 1 and self.sample_times % self.args.worker_log_interval == 0:
             logger.info('Worker_info: {}'.format(self.get_stats()))

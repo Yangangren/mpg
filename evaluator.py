@@ -16,7 +16,8 @@ import numpy as np
 
 from preprocessor import Preprocessor
 from utils.dummy_vec_env import DummyVecEnv
-from utils.misc import TimerStat
+from utils.misc import TimerStat, args2envkwargs
+from env_build.endtoend import CrossroadEnd2endMix
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,8 @@ class Evaluator(object):
         kwargs = copy.deepcopy(vars(self.args))
         if self.args.env_id == 'PathTracking-v0':
             self.env = gym.make(self.args.env_id, num_agent=self.args.num_eval_agent, num_future_data=self.args.num_future_data)
+        elif self.args.env_id == 'CrossroadEnd2endMix-v0':
+            self.env = CrossroadEnd2endMix(**args2envkwargs(args))
         else:
             env = gym.make(self.args.env_id)
             self.env = DummyVecEnv(env)
@@ -65,61 +68,59 @@ class Evaluator(object):
 
     def evaluate_saved_model(self, model_load_dir, ppc_params_load_dir, iteration):
         self.load_weights(model_load_dir, iteration)
-        self.load_ppc_params(ppc_params_load_dir)
+        # self.load_ppc_params(ppc_params_load_dir)
 
     def run_an_episode(self, steps=None, render=True):
-        obs_list = []
-        action_list = []
-        reward_list = []
-        info_list = []
+        track_reward_list = []
+        total_reward_list = []
+        reward_info_dict_list = []
         done = 0
-        obs = self.env.reset()
-        if render: self.env.render()
+        obs, info = self.env.reset()
+        if render: self.env.render(weights=np.zeros((14,)))
         if steps is not None:
             for _ in range(steps):
                 processed_obs = self.preprocessor.tf_process_obses(obs)
-                action = self.policy_with_value.compute_mode(processed_obs)
-                obs_list.append(obs[0])
-                action_list.append(action[0])
-                obs, reward, done, info = self.env.step(action.numpy())
-                if render: self.env.render()
-                reward_list.append(reward[0])
-                info_list.append(info)
+                action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
+                obs, reward, done, info = self.env.step(action.numpy()[0])
+                total_reward = reward - self.args.init_punish_factor * info['reward_info']['real_punish_term']
+                reward_info_dict_list.append(info['reward_info'])
+                if render: self.env.render(weights=attn_weights)
+                track_reward_list.append(reward)
+                total_reward_list.append(total_reward)
         else:
             while not done:
                 processed_obs = self.preprocessor.tf_process_obses(obs)
-                action = self.policy_with_value.compute_mode(processed_obs)
-                obs_list.append(obs[0])
-                action_list.append(action[0])
-                obs, reward, done, info = self.env.step(action.numpy())
-                if render: self.env.render()
-                reward_list.append(reward[0])
-                info_list.append(info[0])
-        episode_return = sum(reward_list)
-        episode_len = len(reward_list)
+                action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
+                obs, reward, done, info = self.env.step(action.numpy()[0])
+                total_reward = reward - self.args.init_punish_factor * info['reward_info']['real_punish_term']
+                if render: self.env.render(weights=attn_weights)
+                track_reward_list.append(reward)
+                total_reward_list.append(total_reward)
+        episode_track_return = sum(track_reward_list)
+        episode_total_return = sum(total_reward_list)
+        episode_len = len(track_reward_list)
         info_dict = dict()
-        for key in info_list[0].keys():
-            info_key = list(map(lambda x: x[key], info_list))
+        for key in reward_info_dict_list[0].keys():
+            info_key = list(map(lambda x: x[key], reward_info_dict_list))
             mean_key = sum(info_key) / len(info_key)
             info_dict.update({key: mean_key})
-        info_dict.update(dict(obs_list=np.array(obs_list),
-                              action_list=np.array(action_list),
-                              reward_list=np.array(reward_list),
-                              episode_return=episode_return,
+        info_dict.update(dict(episode_track_return=episode_track_return,
+                              episode_total_return=episode_total_return,
                               episode_len=episode_len))
         return info_dict
 
-    def run_n_episodes(self, n):
-        metrics_list = []
+    def run_n_episode(self, n):
+        list_of_info_dict = []
         for _ in range(n):
             logger.info('logging {}-th episode'.format(_))
-            episode_info = self.run_an_episode(self.args.fixed_steps, self.args.eval_render)
-            metrics_list.append(self.metrics_for_an_episode(episode_info))
-        out = {}
-        for key in metrics_list[0].keys():
-            value_list = list(map(lambda x: x[key], metrics_list))
-            out.update({key: sum(value_list)/len(value_list)})
-        return metrics_list, out
+            info_dict = self.run_an_episode(self.args.fixed_steps, self.args.eval_render)
+            list_of_info_dict.append(info_dict.copy())
+        n_info_dict = dict()
+        for key in list_of_info_dict[0].keys():
+            info_key = list(map(lambda x: x[key], list_of_info_dict))
+            mean_key = sum(info_key) / len(info_key)
+            n_info_dict.update({key: mean_key})
+        return n_info_dict
 
     def run_n_episodes_parallel(self, n):
         logger.info('logging {} episodes in parallel'.format(n))
@@ -219,19 +220,15 @@ class Evaluator(object):
     def run_evaluation(self, iteration):
         with self.eval_timer:
             self.iteration = iteration
-            if self.args.num_eval_agent == 1:
-                n_metrics_list, mean_metric_dict = self.run_n_episodes(self.args.num_eval_episode)
-            else:
-                n_metrics_list, mean_metric_dict = self.run_n_episodes_parallel(self.args.num_eval_episode)
+            n_info_dict = self.run_n_episode(self.args.num_eval_episode)
             with self.writer.as_default():
-                for key, val in mean_metric_dict.items():
+                for key, val in n_info_dict.items():
                     self.tf.summary.scalar("evaluation/{}".format(key), val, step=self.iteration)
                 for key, val in self.get_stats().items():
                     self.tf.summary.scalar("evaluation/{}".format(key), val, step=self.iteration)
                 self.writer.flush()
-            np.save(self.log_dir + '/n_metrics_list_ite{}.npy'.format(iteration), np.array(n_metrics_list))
         if self.eval_times % self.args.eval_log_interval == 0:
-            logger.info('Evaluator_info: {}, {}'.format(self.get_stats(), mean_metric_dict))
+            logger.info('Evaluator_info: {}, {}'.format(self.get_stats(),n_info_dict))
         self.eval_times += 1
 
     def get_eval_times(self):
