@@ -236,7 +236,19 @@ def plot_eva_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     plt.xticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
     plt.savefig('./eva_track_return.pdf')
 
-    # plt.show()
+    allresults = {}
+    for alg, group in total_dataframe.groupby('task'):
+        allresults.update({alg: []})
+        for ite, group1 in group.groupby('iteration'):
+            if ite >= 15.0:
+                allresults[alg].append(group1['evaluation/track_return'].mean())
+                mean = group1['evaluation/track_return'].mean()
+                std = group1['evaluation/track_return'].std()
+                print(mean, std)
+
+    value1, value2 = allresults.values()
+    ratio = (np.array(value1, dtype=np.float32) - np.array(value2, dtype=np.float32)) / np.array(value1, dtype=np.float32)
+    print(ratio)
 
 
 def plot_trained_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
