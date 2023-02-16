@@ -164,13 +164,13 @@ class CrossroadEnd2endMix(gym.Env):
     def step(self, action):
         self.action = self._action_transformation_for_end2end(action)
         reward, self.reward_info = self._compute_reward(self.obs, self.action)
+        self.done_type, done = self._judge_done()
         next_ego_state, next_ego_params = self._get_next_ego_state(self.action)
         ego_dynamics = self._get_ego_dynamics(next_ego_state, next_ego_params)
         self.traffic.set_own_car(dict(ego=ego_dynamics))
         self.traffic.sim_step()
         all_info = self._get_all_info(ego_dynamics)
         self.obs, other_mask_vector, self.future_n_point, self.future_n_edge = self.get_obs()
-        self.done_type, done = self._judge_done()
         self.reward_info.update({'final_rew': reward})
         all_info.update({'reward_info': self.reward_info, 'future_n_point': self.future_n_point,
                          'mask': other_mask_vector, 'future_n_edge': self.future_n_edge})
@@ -602,11 +602,25 @@ class CrossroadEnd2endMix(gym.Env):
     def _compute_reward(self, obs, action):
         obses, actions = obs[np.newaxis, :], action[np.newaxis, :]
         reward, punish_term_for_training, real_punish_term, _, _, _, _, _, reward_dict = self.env_model.compute_rewards(obses, actions)
+        reward = np.clip(reward.numpy()[0], a_min=-25., a_max=0., dtype=np.float32)
+        if self.traffic.collision_flag:
+            reward += -30
+        if self._break_road_constrain():
+            reward += -10
+        elif self._deviate_too_much():
+            reward += -1
+        elif self._break_red_light():
+            reward += -10
+        elif self._is_achieve_goal():
+            reward += 100
+        else:
+            reward += 5
+
         for k, v in reward_dict.items():
             reward_dict[k] = v.numpy()[0]
         reward_dict.update(punish_term_for_training=punish_term_for_training.numpy()[0],
                            real_punish_term=real_punish_term.numpy()[0])
-        return reward.numpy()[0], reward_dict
+        return reward, reward_dict
 
     def render(self, mode='human', weights=None):
         if mode == 'human':
@@ -1018,6 +1032,7 @@ class CrossroadEnd2endMix(gym.Env):
             # reward info
             if self.reward_info is not None:
                 for key, val in self.reward_info.items():
+                    print(key, val)
                     plt.text(text_x, text_y_start - next(ge), 'rew_{}: {:.4f}'.format(key, val))
 
             ax.add_collection(PatchCollection(patches, match_original=True))

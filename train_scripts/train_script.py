@@ -735,7 +735,7 @@ def built_SAC_parser():
     parser.add_argument('--buffer_log_interval', type=int, default=40000)
 
     # tester and evaluator
-    parser.add_argument('--num_eval_episode', type=int, default=5)
+    parser.add_argument('--num_eval_episode', type=int, default=3)
     parser.add_argument('--eval_log_interval', type=int, default=1)
     parser.add_argument('--fixed_steps', type=int, default=200)
     parser.add_argument('--eval_render', type=bool, default=False)
@@ -747,18 +747,18 @@ def built_SAC_parser():
     parser.add_argument('--value_num_hidden_layers', type=int, default=2)
     parser.add_argument('--value_num_hidden_units', type=int, default=256)
     parser.add_argument('--value_hidden_activation', type=str, default='elu')
-    parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 100000, 8e-6])
+    parser.add_argument('--value_lr_schedule', type=list, default=[8e-5, 300000, 8e-6])
     parser.add_argument('--policy_model_cls', type=str, default='MLP')
     parser.add_argument('--policy_num_hidden_layers', type=int, default=2)
     parser.add_argument('--policy_num_hidden_units', type=int, default=256)
     parser.add_argument('--policy_hidden_activation', type=str, default='elu')
     parser.add_argument('--policy_out_activation', type=str, default='linear')
-    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 100000, 3e-6])
+    parser.add_argument('--policy_lr_schedule', type=list, default=[3e-5, 300000, 3e-6])
     parser.add_argument('--alpha', default=0.03)  # 'auto' 0.02
     alpha = parser.parse_args().alpha
     if alpha == 'auto':
         parser.add_argument('--target_entropy', type=float, default=-2)
-    parser.add_argument('--alpha_lr_schedule', type=list, default=[8e-5, 100000, 8e-6])
+    parser.add_argument('--alpha_lr_schedule', type=list, default=[8e-5, 300000, 8e-6])
     parser.add_argument('--policy_only', type=bool, default=False)
     parser.add_argument('--double_Q', type=bool, default=True)
     parser.add_argument('--target', type=bool, default=True)
@@ -776,7 +776,7 @@ def built_SAC_parser():
 
     # Optimizer (PABAL)
     parser.add_argument('--max_sampled_steps', type=int, default=0)
-    parser.add_argument('--max_iter', type=int, default=100000)
+    parser.add_argument('--max_iter', type=int, default=300000)
     parser.add_argument('--num_workers', type=int, default=NUM_WORKER)
     parser.add_argument('--num_learners', type=int, default=NUM_LEARNER)
     parser.add_argument('--num_buffers', type=int, default=NUM_BUFFER)

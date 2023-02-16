@@ -82,17 +82,19 @@ class Evaluator(object):
                 processed_obs = self.preprocessor.tf_process_obses(obs)
                 action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
-                total_reward = reward - self.args.init_punish_factor * info['reward_info']['real_punish_term']
+                total_reward = reward
                 reward_info_dict_list.append(info['reward_info'])
                 if render: self.env.render(weights=attn_weights)
                 track_reward_list.append(reward)
                 total_reward_list.append(total_reward)
+                if done:
+                    break
         else:
             while not done:
                 processed_obs = self.preprocessor.tf_process_obses(obs)
                 action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
-                total_reward = reward - self.args.init_punish_factor * info['reward_info']['real_punish_term']
+                total_reward = reward
                 if render: self.env.render(weights=attn_weights)
                 track_reward_list.append(reward)
                 total_reward_list.append(total_reward)
