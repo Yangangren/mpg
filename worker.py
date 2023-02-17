@@ -112,8 +112,11 @@ class OffPolicyWorker(object):
             processed_rew = self.preprocessor.process_rew(reward, self.done)
 
             batch_data.append((self.obs.copy(), action.numpy()[0], reward, obs_tp1.copy(), self.done))
-            self.obs, self.info = self.env.reset()
-
+            if self.done:
+                self.obs, self.info = self.env.reset()
+            else:
+                self.obs = obs_tp1.copy()
+                self.info = info.copy()
         if self.worker_id == 1 and self.sample_times % self.args.worker_log_interval == 0:
             logger.info('Worker_info: {}'.format(self.get_stats()))
 
