@@ -84,7 +84,7 @@ class Evaluator(object):
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 total_reward = reward
                 reward_info_dict_list.append(info['reward_info'])
-                if render: self.env.render(weights=attn_weights)
+                if render: self.env.render(weights=np.zeros((14,)))
                 track_reward_list.append(reward)
                 total_reward_list.append(total_reward)
                 if done:
@@ -95,7 +95,7 @@ class Evaluator(object):
                 action = self.policy_with_value.compute_mode(processed_obs[np.newaxis, :])
                 obs, reward, done, info = self.env.step(action.numpy()[0])
                 total_reward = reward
-                if render: self.env.render(weights=attn_weights)
+                if render: self.env.render(weights=np.zeros((14,)))
                 track_reward_list.append(reward)
                 total_reward_list.append(total_reward)
         episode_track_return = sum(track_reward_list)

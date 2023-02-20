@@ -100,6 +100,8 @@ class CrossroadEnd2endMix(gym.Env):
         self.ref_point = None
         self.future_n_point = None
         self.future_point_num = future_point_num
+        self.last_light = 0
+        self.last_in_inter = False
 
         """Load sensor module."""
         if self.mode == 'testing':
@@ -155,6 +157,8 @@ class CrossroadEnd2endMix(gym.Env):
         self.action = None
         self.reward_info = None
         self.done_type = 'not_done_yet'
+        self.last_light = self.light_phase
+        self.last_in_inter = Point(self.ego_dynamics['x'], self.ego_dynamics['y']).within(Polygon(Para.CROSSROAD_INTER))
         all_info = dict(future_n_point=self.future_n_point, mask=other_mask_vector, future_n_edge=self.future_n_edge)
         return self.obs, all_info
 
@@ -174,6 +178,8 @@ class CrossroadEnd2endMix(gym.Env):
         self.reward_info.update({'final_rew': reward})
         all_info.update({'reward_info': self.reward_info, 'future_n_point': self.future_n_point,
                          'mask': other_mask_vector, 'future_n_edge': self.future_n_edge})
+        self.last_light = self.light_phase
+        self.last_in_inter = Point(self.ego_dynamics['x'], self.ego_dynamics['y']).within(Polygon(Para.CROSSROAD_INTER))
         return self.obs, reward, done, all_info
 
     def _set_observation_space(self, observation):
@@ -254,7 +260,7 @@ class CrossroadEnd2endMix(gym.Env):
 
     def _deviate_too_much(self):
         delta_longi, delta_lateral, delta_phi, delta_v = self.obs[self.ego_info_dim:self.ego_info_dim + self.track_info_dim]
-        return True if abs(delta_lateral) > 15 else False
+        return True if abs(delta_lateral) > 4 else False
 
     def _break_road_constrain(self):
         results = list(map(lambda x: judge_feasible(*x, self.training_task), self.ego_dynamics['corner_point']))
@@ -271,7 +277,11 @@ class CrossroadEnd2endMix(gym.Env):
             return True
 
     def _break_red_light(self):
-        return True if self.light_phase > 2 and self.ego_dynamics['y'] > -Para.CROSSROAD_SIZE_LON / 2 and self.training_task != 'right' else False
+        if self.last_light <= 2 and not self.last_in_inter:
+            return True if self.light_phase > 2 and self.ego_dynamics['y'] > -Para.CROSSROAD_SIZE_LON / 2 \
+                           and -Para.CROSSROAD_SIZE_LON / 2 < self.ego_dynamics['x'] < Para.CROSSROAD_SIZE_LON / 2 and self.training_task != 'right' else False
+        else:
+            return False
 
     def _is_achieve_goal(self):
         x = self.ego_dynamics['x']
@@ -608,7 +618,7 @@ class CrossroadEnd2endMix(gym.Env):
         if self._break_road_constrain():
             reward += -10
         elif self._deviate_too_much():
-            reward += -1
+            reward += -10
         elif self._break_red_light():
             reward += -10
         elif self._is_achieve_goal():
@@ -900,14 +910,14 @@ class CrossroadEnd2endMix(gym.Env):
                 ax.add_patch(sensor)
 
             # plot others
-            filted_all_other = [item for item in self.all_other if is_in_plot_area(item['x'], item['y'])]
-            other_xs = np.array([item['x'] for item in filted_all_other], np.float32)
-            other_ys = np.array([item['y'] for item in filted_all_other], np.float32)
-            other_as = np.array([item['phi'] for item in filted_all_other], np.float32)
-            other_ls = np.array([item['l'] for item in filted_all_other], np.float32)
-            other_ws = np.array([item['w'] for item in filted_all_other], np.float32)
-
-            draw_rotate_batch_rec(other_xs, other_ys, other_as, other_ls, other_ws)
+            # filted_all_other = [item for item in self.all_other if is_in_plot_area(item['x'], item['y'])]
+            # other_xs = np.array([item['x'] for item in filted_all_other], np.float32)
+            # other_ys = np.array([item['y'] for item in filted_all_other], np.float32)
+            # other_as = np.array([item['phi'] for item in filted_all_other], np.float32)
+            # other_ls = np.array([item['l'] for item in filted_all_other], np.float32)
+            # other_ws = np.array([item['w'] for item in filted_all_other], np.float32)
+            #
+            # draw_rotate_batch_rec(other_xs, other_ys, other_as, other_ls, other_ws)
 
             # plot interested others
             if weights is not None:
