@@ -24,14 +24,14 @@ from policy import Policy4Toyota
 from evaluator import Evaluator
 NAME2POLICIES = dict([('Policy4Toyota', Policy4Toyota)])
 NAME2EVALUATORS = dict([('Evaluator', Evaluator)])
-import matplotlib.font_manager as fm
-zhfont1 = fm.FontProperties(fname=r'D:\simsun.ttf',size=14)
-
 plt.rc('font', family='Times New Roman')
 # plt.rcParams['mathtext.fontset'] = 'stix'
 import matplotlib
-matplotlib.rcParams['mathtext.default'] = 'regular'
+# matplotlib.rcParams['mathtext.default'] = 'regular'
+matplotlib.rcParams['mathtext.fontset'] = 'stix'
 
+import matplotlib.font_manager as fm
+zhfont1 = fm.FontProperties(fname=r'D:\simsun.ttf')
 sns.set(style=None)
 
 palette = [(1.0, 0.48627450980392156, 0.0),
@@ -92,9 +92,8 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
                 df_list.append(df_in_one_run_of_one_alg)
     total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
     np.save('data_thesis.npy', total_dataframe)
-    figsize = (10, 8)
-    fontsize = 25
-
+    figsize = (11, 8)
+    fontsize = 35
     font_legend = {
         'family': 'Times New Roman',
         'weight': 'normal',
@@ -104,15 +103,15 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     }
 
     f1 = plt.figure(1, figsize=figsize)
-    ax1 = f1.add_axes([0.10, 0.115, 0.85, 0.87])
+    ax1 = f1.add_axes([0.12, 0.135, 0.83, 0.84])
     sns.lineplot(x="iteration", y="learner_stats/scalar/obj_loss_smo", hue="task",
-                 data=total_dataframe, linewidth=2, palette=palette, legend=False)
+                 data=total_dataframe, linewidth=2, palette=palette, legend=False, style='task')
+    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize-5)
+    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize-5)
+    ax1.set_ylabel('跟踪性能', fontproperties=zhfont1, fontsize=fontsize)
+    ax1.set_xlabel(r"迭代次数 ($\times 10^4$)", fontproperties=zhfont1, fontsize=fontsize)
     plt.ylim(0, 40)
     plt.xlim(0, 20)
-    ax1.set_ylabel('跟踪性能', fontproperties=zhfont1, fontsize=fontsize)
-    ax1.set_xlabel(r"迭代次数 $[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
-    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
-    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
     plt.savefig('./loss_track.pdf')
 
     f2 = plt.figure(2, figsize=figsize)
@@ -123,22 +122,22 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     plt.xlim(0, 20)
     ax2.set_ylabel('值网络损失函数', fontproperties=zhfont1, fontsize=fontsize)
     ax2.set_xlabel(r"迭代次数 $[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
-    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
-    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
+    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize)
+    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize)
     plt.savefig('./loss_value.pdf')
 
     f3 = plt.figure(3, figsize=figsize)
-    ax3 = f3.add_axes([0.11, 0.12, 0.85, 0.87])
+    ax3 = f3.add_axes([0.12, 0.135, 0.83, 0.84])
     sns.lineplot(x="iteration", y="learner_stats/scalar/punish_term_for_training_smo", hue="task",
-                 data=total_dataframe, linewidth=2, palette=palette)
+                 data=total_dataframe, linewidth=2, palette=palette, style='task')
     handles, labels = ax3.get_legend_handles_labels()
     labels = lbs
     ax3.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize, prop=font_legend)
+    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize-5)
+    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize-5)
     ax3.set_ylabel('约束性能', fontproperties=zhfont1, fontsize=fontsize)
-    ax3.set_xlabel(r"迭代次数 $[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
+    ax3.set_xlabel(r"迭代次数 ($\times 10^4$)", fontproperties=zhfont1, fontsize=fontsize)
     plt.xlim(0, 20)
-    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
-    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
     plt.savefig('./loss_penalty.pdf')
 
     f4 = plt.figure(4, figsize=figsize)
@@ -152,8 +151,8 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     ax4.set_xlabel(r"迭代次数 $[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
     # plt.ylim(0, 3)
     plt.xlim(0, 20)
-    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
-    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
+    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize)
+    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize)
     plt.savefig('./loss_policy.pdf')
 
 
@@ -199,8 +198,8 @@ def plot_eva_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
                     df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
                 df_list.append(df_in_one_run_of_one_alg)
     total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
-    figsize = (10, 8)
-    fontsize = 20
+    figsize = (12, 8)
+    fontsize = 35
 
     f1 = plt.figure(1, figsize=figsize)
     ax1 = f1.add_axes([0.14, 0.14, 0.84, 0.86])
@@ -215,10 +214,10 @@ def plot_eva_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     plt.savefig('./eva_total_return.pdf')
 
     f2 = plt.figure(2, figsize=figsize)
-    ax2 = f2.add_axes([0.12, 0.12, 0.845, 0.86])
+    ax2 = f2.add_axes([0.15, 0.135, 0.81, 0.84])
     sns.lineplot(x="iteration", y="evaluation/track_return_smo", hue="task",
-                 data=total_dataframe, linewidth=2, ci=60, palette=palette, legend=False)
-    handles, labels = ax1.get_legend_handles_labels()
+                 data=total_dataframe, linewidth=2, ci=60, style='task', palette=palette)
+    handles, labels = ax2.get_legend_handles_labels()
     labels = lbs
     font_legend = {
         'family': 'Times New Roman',
@@ -231,9 +230,9 @@ def plot_eva_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     ax2.set_ylim(-400, 0)
     ax2.set_xlim(0, 20)
     ax2.set_ylabel('平均累计回报', fontproperties=zhfont1, fontsize=fontsize)
-    ax2.set_xlabel(r"迭代次数 $[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
-    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
-    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize - 4)
+    ax2.set_xlabel(r"迭代次数 ($\times 10^4$)", fontproperties=zhfont1, fontsize=fontsize)
+    plt.yticks(fontproperties='Times New Roman', fontsize=fontsize-5)
+    plt.xticks(fontproperties='Times New Roman', fontsize=fontsize-5)
     plt.savefig('./eva_track_return.pdf')
 
     allresults = {}
