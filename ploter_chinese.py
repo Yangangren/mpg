@@ -75,9 +75,9 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
     tag2plot = ['evaluation/episode_return', 'evaluation/delta_y_mse', 'evaluation/delta_phi_mse', 'evaluation/delta_v_mse']
     # tar: 'NADP'; error: 'error_plot'
     env_list = ['NADP']
-    task_list = ['adv_noise', 'no_noise', 'aaac', 'adv_noise_smooth_uniform', 'adv_noise_smooth'][::-1]
+    task_list = ['adv_noise', 'aaac', 'no_noise','adv_noise_smooth_uniform', 'adv_noise_smooth'][::-1]
     palette = "bright"
-    lbs = ['RARL', 'ADP', 'RPG', 'SAAC-u', 'SAAC-a'][::-1]
+    lbs = ['RARL', 'RPG', 'ADP', 'SAAC-u', 'SAAC-a'][::-1]
     dir_str = './results/{}/{}'
     df_list = []
     for alg in env_list:
@@ -105,7 +105,7 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
                 data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i * period] / 10000. for
                                                            i in range(len2)]
                 if task == 'adv_noise':
-                    WINDOWSIZE = 2
+                    WINDOWSIZE = 1
                 elif task == 'aaac':
                     WINDOWSIZE = 2
                 else:
@@ -117,7 +117,7 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
                 df_list.append(df_in_one_run_of_one_alg)
     total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
     figsize = (12, 8)
-    fontsize = 25
+    fontsize = 30
 
     if fname is not None:
         f2 = plt.figure(1, figsize=figsize)
@@ -140,16 +140,19 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         f1 = plt.figure(1, figsize=(12, 8))
         ax1 = f1.add_axes([0.13, 0.12, 0.85, 0.86])
         sns.lineplot(x="iteration", y="evaluation/episode_return_smo", hue="task",
-                     data=total_dataframe, linewidth=2, palette=palette, ci=90, err_style=None)
-        plt.ylim(-600, 0)
+                     data=total_dataframe, linewidth=2, palette=palette, ci=90, style='task', err_style=None)
+        # plt.plot([0, 10], [-25, -25], linewidth=1, linestyle='--', c='black')
+        # plt.plot([0, 10], [-175, -175], linewidth=1, linestyle='-.', c='black')
+        plt.ylim(-500, 0)
         plt.xlim(0, 10.)
         handles, labels = ax1.get_legend_handles_labels()
         labels = lbs
         ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, fontsize=fontsize + 6, prop=enfont1)
-        ax1.set_ylabel('平均累计收益', fontproperties=zhfont1, fontsize=fontsize)
-        ax1.set_xlabel(r"迭代次数$[\times 10^4]$", fontproperties=zhfont1, fontsize=fontsize)
-        plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
-        plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
+
+        ax1.set_ylabel('平均累计回报', fontproperties=zhfont1, fontsize=fontsize)
+        ax1.set_xlabel(r"迭代次数$(\times 10^4)$", fontproperties=zhfont1, fontsize=fontsize)
+        plt.yticks(fontproperties=enfont1, fontsize=fontsize-5)
+        plt.xticks(fontproperties=enfont1, fontsize=fontsize-5)
         plt.savefig('./results/tar_plot/test_total_return.pdf')
         plt.close(f1)
 
@@ -229,7 +232,7 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         plt.yticks(fontproperties=enfont1, fontsize=fontsize-2)
         plt.xticks(fontproperties=enfont1, fontsize=fontsize-2)
         plt.savefig('./results/tar_plot/heading_error.pdf')
-
+        totalresults = {}
         allresults = {}
         results2print = {}
         result2conv = {}
@@ -241,11 +244,12 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
                 for ite, group1 in group.groupby('num_run'):
                     print(ite, list(group1["evaluation/episode_return_smo"])[-3:])
             allresults.update({alg: []})
+            totalresults.update({alg: []})
             result2conv.update({alg: []})
             stop_flag = 0
             for ite, group1 in group.groupby('iteration'):
                 mean = group1['evaluation/episode_return_smo'].mean()
-                if stop_flag != 1 and mean > -25.:
+                if stop_flag != 1 and mean > -175.:
                     result2conv[alg].append(ite)
                     stop_flag = 1
                 std = group1['evaluation/episode_return_smo'].std()
@@ -255,6 +259,7 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
 
         for alg, result in allresults.items():
             mean, std = sorted(result, key=lambda x: x[0])[-1]
+            print('final perf:', alg, result[-1])
             results2print.update({alg: [mean, std]})
 
         print(results2print)
