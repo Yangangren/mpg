@@ -79,7 +79,6 @@ def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
                 data_in_one_run_of_one_alg = {key: val[2:] for key, val in data_in_one_run_of_one_alg.items()}
                 data_in_one_run_of_one_alg.update(dict(algorithm=alg, task=task, num_run=num_run))
                 df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
-                df_in_one_run_of_one_alg['learner_stats/scalar/punish_term_for_training'] = 10 * df_in_one_run_of_one_alg['learner_stats/scalar/punish_term_for_training']
                 for tag in tag2plot:
                     df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
                 df_list.append(df_in_one_run_of_one_alg)
