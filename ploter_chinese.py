@@ -203,9 +203,9 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         f4 = plt.figure(4, figsize=(10, 8))
         ax4 = f4.add_axes([0.10, 0.115, 0.88, 0.85])
         sns.lineplot(x="iteration", y="evaluation/delta_y_mse_smo", hue="task",
-                     data=total_dataframe, linewidth=2, palette=palette)
-        ax4.set_xlabel(r"迭代次数$[\times 10^4]$", fontsize=fontsize)
-        ax4.set_ylabel(r"位置误差[$\mathrm {m}$]", fontsize=fontsize)
+                     data=total_dataframe, linewidth=2, palette=palette, style='task')
+        ax4.set_xlabel(r"迭代次数($\times 10^4$)", fontsize=fontsize)
+        ax4.set_ylabel(r"位置误差($\mathrm {m}$)", fontsize=fontsize)
         plt.yticks(fontproperties='Times New Roman', fontsize=fontsize-5)
         plt.xticks(fontproperties='Times New Roman', fontsize=fontsize-5)
         handles, labels = ax4.get_legend_handles_labels()
@@ -232,9 +232,9 @@ def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
         f6 = plt.figure(6, figsize=(10, 8))
         ax6 = f6.add_axes([0.12, 0.115, 0.85, 0.87])
         sns.lineplot(x="iteration", y="evaluation/delta_phi_mse_smo", hue="task",
-                     data=total_dataframe, linewidth=2, palette=palette, legend=False)
-        ax6.set_xlabel(r"迭代次数$[\times 10^4]$", fontsize=fontsize)
-        ax6.set_ylabel(r'航向角误差[$\rm rad$]', fontsize=fontsize)
+                     data=total_dataframe, linewidth=2, palette=palette, style='task', legend=False)
+        ax6.set_xlabel(r"迭代次数($\times 10^4$)", fontsize=fontsize)
+        ax6.set_ylabel(r'航向角误差($\rm rad$)', fontsize=fontsize)
         handles, labels = ax6.get_legend_handles_labels()
         labels = lbs
         # ax6.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
@@ -323,7 +323,7 @@ def plot_robust_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     f1 = plt.figure(1, figsize=(12, 8))
     ax1 = f1.add_axes([0.115, 0.12, 0.86, 0.86])
     sns.lineplot(x="iteration", y="evaluation/episode_return_smo", hue="task",
-                 data=total_dataframe, linewidth=2, palette=palette, ci=90)
+                 data=total_dataframe, linewidth=2, palette=palette, ci=90, style='task')
     # plt.ylim(-500, 0)
     plt.xlim(-0.3, 0.3)
     handles, labels = ax1.get_legend_handles_labels()
@@ -331,7 +331,7 @@ def plot_robust_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     ax1.legend(handles=handles, labels=labels, loc='lower right', frameon=False, prop={'size':25, 'family': 'Times New Roman'})
     plt.yticks(fontproperties='Times New Roman', fontsize=fontsize-5)
     plt.xticks(fontproperties='Times New Roman', fontsize=fontsize-5)
-    ax1.set_xlabel(r"横向速度偏移[$\rm m/s$]", fontsize=fontsize)
+    ax1.set_xlabel(r"横向速度偏移($\rm m/s$)", fontsize=fontsize)
     ax1.set_ylabel('平均累计回报', fontproperties=zhfont1, fontsize=fontsize)
     plt.savefig('./results/robust test/robust_test_return.pdf')
 
@@ -571,7 +571,7 @@ def main(dirs_dict_for_plot=None):
 if __name__ == "__main__":
     # main()
     # plot_opt_results_of_all_alg_n_runs()
-    # plot_eval_results_of_all_alg_n_runs()
+    plot_eval_results_of_all_alg_n_runs()
     plot_robust_results_of_all_alg_n_runs()
     # print(compute_convergence_speed(-5.))
     # plot_trained_results_of_all_alg_n_runs(fname=None)
