@@ -42,10 +42,6 @@ palette = [(1.0, 0.48627450980392156, 0.0),
 WINDOWSIZE = 6
 
 
-def min_n(inp_list, n):
-    return sorted(inp_list)[:n]
-
-
 def plot_opt_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
     tag2plot = ['learner_stats/scalar/obj_loss',
                 'learner_stats/scalar/obj_v_loss',
@@ -243,85 +239,10 @@ def plot_eva_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
                 allresults[alg].append(group1['evaluation/track_return'].mean())
                 mean = group1['evaluation/track_return'].mean()
                 std = group1['evaluation/track_return'].std()
-                print(mean, std)
 
     value1, value2 = allresults.values()
     ratio = (np.array(value1, dtype=np.float32) - np.array(value2, dtype=np.float32)) / np.array(value1, dtype=np.float32)
     print(ratio)
-
-
-def plot_trained_results_of_all_alg_n_runs(dirs_dict_for_plot=None):
-    tag2plot = ['evaluation/total_return',
-                'evaluation/track_return',
-                ]
-    env_list = ['CrossroadEnd2endAdv-v0']
-    task_list = ['adv_noise', 'no_noise', 'rand_noise']
-    palette = "bright"
-    lbs = ['adv_noise', 'no_noise', 'rand_noise']
-    dir_str = './results/{}/{}'
-    df_list = []
-    for alg in env_list:
-        for task in task_list:
-            data2plot_dir = dir_str.format(alg, task)
-            data2plot_dirs_list = dirs_dict_for_plot[alg] if dirs_dict_for_plot is not None else os.listdir(data2plot_dir)
-            for num_run, dir in enumerate(data2plot_dirs_list):
-                opt_dir = data2plot_dir + '/' + dir + '/tester'
-                opt_file = os.path.join(opt_dir,
-                                        [file_name for file_name in os.listdir(opt_dir) if
-                                         file_name.startswith('events')][0])
-                opt_summarys = tf.data.TFRecordDataset([opt_file])
-                data_in_one_run_of_one_alg = {key: [] for key in tag2plot}
-                data_in_one_run_of_one_alg.update({'iteration': []})
-                for opt_summary in opt_summarys:
-                    event = event_pb2.Event.FromString(opt_summary.numpy())
-                    for v in event.summary.value:
-                        t = tf.make_ndarray(v.tensor)
-                        for tag in tag2plot:
-                            if tag in v.tag:
-                                data_in_one_run_of_one_alg[tag].append(float(t))
-                                data_in_one_run_of_one_alg['iteration'].append(int(event.step))
-                len1, len2 = len(data_in_one_run_of_one_alg['iteration']), len(data_in_one_run_of_one_alg[tag2plot[0]])
-                period = int(len1 / len2)
-                data_in_one_run_of_one_alg['iteration'] = [data_in_one_run_of_one_alg['iteration'][i * period] / 10000. for
-                                                           i in range(len2)]
-
-                data_in_one_run_of_one_alg = {key: val[:] for key, val in data_in_one_run_of_one_alg.items()}
-                data_in_one_run_of_one_alg.update(dict(algorithm=alg, task=task, num_run=num_run))
-                df_in_one_run_of_one_alg = pd.DataFrame(data_in_one_run_of_one_alg)
-                for tag in tag2plot:
-                    df_in_one_run_of_one_alg[tag+'_smo'] = df_in_one_run_of_one_alg[tag].rolling(WINDOWSIZE, min_periods=1).mean()
-                df_list.append(df_in_one_run_of_one_alg)
-    total_dataframe = df_list[0].append(df_list[1:], ignore_index=True) if len(df_list) > 1 else df_list[0]
-    figsize = (10, 8)
-    axes_size = [0.12, 0.12, 0.87, 0.87]
-    fontsize = 25
-
-    f1 = plt.figure(1, figsize=figsize)
-    ax1 = f1.add_axes([0.13, 0.12, 0.86, 0.87])
-    sns.lineplot(x="iteration", y="evaluation/total_return_smo", hue="task",
-                 data=total_dataframe, linewidth=2, palette=palette,)
-    plt.ylim(-1000, 0)
-    handles, labels = ax1.get_legend_handles_labels()
-    labels = lbs
-    ax1.legend(handles=handles, labels=labels, loc='upper right', frameon=False, fontsize=fontsize)
-    ax1.set_ylabel('TAR', fontsize=fontsize)
-    ax1.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
-    plt.savefig('./test_total_return.pdf')
-
-    f2 = plt.figure(2, figsize=figsize)
-    ax2 = f2.add_axes([0.15, 0.12, 0.85, 0.86])
-    sns.lineplot(x="iteration", y="evaluation/track_return_smo", hue="task",
-                 data=total_dataframe, linewidth=2, palette=palette, legend=False)
-    plt.ylim(-400, 0)
-    ax2.set_ylabel('track return', fontsize=fontsize)
-    ax2.set_xlabel("Iteration [x10000]", fontsize=fontsize)
-    plt.yticks(fontsize=fontsize)
-    plt.xticks(fontsize=fontsize)
-    plt.savefig('./test_track_return.pdf')
-
-    plt.show()
 
 
 def main(dirs_dict_for_plot=None):
@@ -359,7 +280,5 @@ def main(dirs_dict_for_plot=None):
 
 
 if __name__ == "__main__":
-    # plot_opt_results_of_all_alg_n_runs()
+    plot_opt_results_of_all_alg_n_runs()
     plot_eva_results_of_all_alg_n_runs()
-    # main()
-    # plot_trained_results_of_all_alg_n_runs()
