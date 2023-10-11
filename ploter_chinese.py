@@ -73,8 +73,8 @@ def help_func():
 
 def plot_eval_results_of_all_alg_n_runs(dirs_dict_for_plot=None, fname=None):
     tag2plot = ['evaluation/episode_return', 'evaluation/delta_y_mse', 'evaluation/delta_phi_mse', 'evaluation/delta_v_mse']
-    # tar: 'NADP'; error: 'error_plot'
-    env_list = ['NADP']
+    # tar: 'tar_plot'; error: 'error_plot'
+    env_list = ['tar_plot']
     task_list = ['adv_noise', 'aaac', 'no_noise','adv_noise_smooth_uniform', 'adv_noise_smooth'][::-1]
     palette = "bright"
     lbs = ['RARL', 'RPG', 'ADP', 'SAAC-u', 'SAAC-a'][::-1]
